@@ -1,0 +1,8 @@
+[workspace]
+members = [
+    'pallets/single-session-app',
+    'pallets/multi-session-app',
+    'pallets/single-gomoku',
+]
+[profile.release]
+panic = 'unwind'

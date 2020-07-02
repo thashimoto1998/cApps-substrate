@@ -21,12 +21,6 @@ git = 'https://github.com/paritytech/substrate.git'
 tag = 'v2.0.0-rc3'
 version = '2.0.0-rc3'
 
-[dependencies.celer-pay]
-default-features = false
-path = '../../celer-pay'
-package = 'celer-pay-module'
-version = '0.8.3'
-
 [dev-dependencies.sp-io]
 default-features = false
 git = 'https://github.com/paritytech/substrate.git'
@@ -76,6 +70,5 @@ std = [
     'frame-system/std',
     'sp-runtime/std',
     'sp-std/std',
-    'celer-pay/std',
     'pallet-balances/std',
 ]

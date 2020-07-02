@@ -386,7 +386,7 @@ impl<T: Trait> Module<T> {
     }
     
     /// get app id
-    pub fn calculate_app_id(
+    fn calculate_app_id(
         initiate_request: AppInitiateRequestOf<T>
     ) -> T::Hash {
         let app_account = Self::app_account();
@@ -463,7 +463,7 @@ impl<T: Trait> Module<T> {
         SINGLE_SESSION_APP_ID.into_account()
     }
 
-    pub fn valid_signers(
+    fn valid_signers(
         signatures: Vec<<T as Trait>::Signature>,
         encoded: &[u8],
         signers: Vec<T::AccountId>,
@@ -480,7 +480,7 @@ impl<T: Trait> Module<T> {
         Ok(())
     }
 
-    pub fn encode_app_state(
+    fn encode_app_state(
         app_state: AppStateOf<T>
     ) -> Vec<u8> {
         let mut encoded = app_state.nonce.encode();
