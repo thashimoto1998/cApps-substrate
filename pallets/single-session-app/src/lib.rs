@@ -20,9 +20,9 @@ use sp_std::{prelude::*, vec::Vec};
 
 #[derive(Clone, Eq, PartialEq, PartialOrd, Ord, Encode, Decode, RuntimeDebug)]
 pub struct AppInitiateRequest<AccountId, BlockNumber> {
-    pub nonce: u128,
-    pub players: Vec<AccountId>,
-    pub timeout: BlockNumber,
+    nonce: u128,
+    players: Vec<AccountId>,
+    timeout: BlockNumber,
 }
 
 pub type AppInitiateRequestOf<T> = AppInitiateRequest<
@@ -32,11 +32,11 @@ pub type AppInitiateRequestOf<T> = AppInitiateRequest<
 
 #[derive(Clone, Eq, PartialEq, PartialOrd, Ord, Encode, Decode, RuntimeDebug)]
 pub struct AppState<BlockNumber, Hash> {
-    pub nonce: u128,
-    pub seq_num: u128,
-    pub state: u8,
-    pub timeout: BlockNumber,
-    pub app_id: Hash,
+    nonce: u128,
+    seq_num: u128,
+    state: u8,
+    timeout: BlockNumber,
+    app_id: Hash,
 }
 
 pub type AppStateOf<T> = AppState<
@@ -46,8 +46,8 @@ pub type AppStateOf<T> = AppState<
 
 #[derive(Clone, Eq, PartialEq, PartialOrd, Ord, Encode, Decode, RuntimeDebug)]
 pub struct StateProof<BlockNumber, Hash, Signature> {
-    pub app_state: AppState<BlockNumber, Hash>,
-    pub sigs: Vec<Signature>,
+    app_state: AppState<BlockNumber, Hash>,
+    sigs: Vec<Signature>,
 }
 
 pub type StateProofOf<T> = StateProof<
@@ -66,13 +66,13 @@ pub enum AppStatus {
 
 #[derive(Clone, Eq, PartialEq, PartialOrd, Ord, Encode, Decode, RuntimeDebug)]
 pub struct AppInfo<AccountId, BlockNumber> {
-    pub state: u8,
-    pub nonce: u128,
-    pub players: Vec<AccountId>,
-    pub seq_num: u128,
-    pub timeout: BlockNumber,
-    pub deadline: BlockNumber,
-    pub status: AppStatus,
+    state: u8,
+    nonce: u128,
+    players: Vec<AccountId>,
+    seq_num: u128,
+    timeout: BlockNumber,
+    deadline: BlockNumber,
+    status: AppStatus,
 }
 
 pub type AppInfoOf<T> = AppInfo<

@@ -2,9 +2,6 @@
 
 mod mock;
 
-//#[cfg(test)]
-//mod tests;
-
 use codec::{Decode, Encode};
 use frame_support::{
     decl_module, decl_storage, decl_event, decl_error, ensure,
@@ -21,6 +18,7 @@ use sp_std::{prelude::*, vec::Vec};
 #[derive(Clone, Eq, PartialEq, PartialOrd, Ord, Encode, Decode, RuntimeDebug)]
 pub struct AppInitiateRequest<AccountId, BlockNumber> {
     nonce: u128,
+    player_num: u8,
     players: Vec<AccountId>,
     timeout: BlockNumber,
     min_stone_offchain: u8,
@@ -34,7 +32,6 @@ pub type AppInitiateRequestOf<T> = AppInitiateRequest<
 
 #[derive(Clone, Eq, PartialEq, PartialOrd, Ord, Encode, Decode, RuntimeDebug)]
 pub struct AppState<BlockNumber, Hash> {
-    nonce: u128,
     seq_num: u128,
     board_state: Vec<u8>,
     timeout: BlockNumber,
@@ -68,8 +65,8 @@ pub enum AppStatus {
 
 #[derive(Clone, Eq, PartialEq, PartialOrd, Ord, Encode, Decode, RuntimeDebug)]
 pub struct GomokuInfo<AccountId, BlockNumber> {
-    nonce: u128,
     players: Vec<AccountId>,
+    player_num: u8,
     seq_num: u128,
     timeout: BlockNumber,
     deadline: BlockNumber,
@@ -84,22 +81,28 @@ pub type GomokuInfoOf<T> = GomokuInfo<
 
 #[derive(Clone, Eq, PartialEq, PartialOrd, Ord, Encode, Decode, RuntimeDebug)]
 pub enum StateKey {
-    Turn = 0,
-    Winner = 1,
+    TurnColor = 0,
+    WinnerColor = 1,
     FullState = 2,
 }
 
 #[derive(Clone, Eq, PartialEq, PartialOrd, Ord, Encode, Decode, RuntimeDebug)]
 struct GomokuState {
-    board_state: Option<Vec<u8>>, // 227 length: u8 winner + u8 turn + 15*15 board
+    board_state: Option<Vec<u8>>, // 228 length: u8 winner color + u8 turn color + u8 black id + 15*15 board
     stone_num: Option<u16>, // number of stones
-    stone_num_onchain: Option<u16>, // number of stones places on-chain
-    state_key: Option<StateKey>, // key of turn, winner fullstate
+    stone_num_onchain: Option<u16>, // number of stones placed on-chain
+    state_key: Option<StateKey>, // key of turn_color, winner_color, full_state
     min_stone_offchain: u8, // minimal number of stones before go onchain
     max_stone_onchain: u8, // maximal number of stones after go onchain
 }
 
-pub const SINGLE_GOMOKU_ID: ModuleId = ModuleId(*b"s_gomoku");
+#[derive(Eq, PartialEq)]
+pub enum Color {
+    Black = 1,
+    White = 2,
+}
+
+pub const MULTI_GOMOKU_ID: ModuleId = ModuleId(*b"m_gomoku");
 
 pub trait Trait: system::Trait {
     type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
@@ -108,19 +111,20 @@ pub trait Trait: system::Trait {
 }
 
 decl_storage! {
-    trait Store for Module<T: Trait> as SingleGomoku {
-        pub SingleGomokuInfoMap get(fn gomoku_info): 
+    trait Store for Module<T: Trait> as MultiGomoku {
+        pub MultiGomokuInfoMap get(fn gmoku_info):
             map hasher(blake2_128_concat) T::Hash => Option<GomokuInfoOf<T>>;
     }
 }
 
+
 decl_module! {
     pub struct Module<T: Trait> for enum Call where origin: T::Origin {
         type Error = Error<T>;
-        
+
         fn deposit_event() = default;
 
-        /// Initiate single gomoku app
+        /// Initate multi gomoku app
         #[weight = 10_000]
         fn app_initiate(
             origin,
@@ -130,13 +134,12 @@ decl_module! {
 
             let app_id = Self::calculate_app_id(initiate_request.clone());
             ensure!(
-                SingleGomokuInfoMap::<T>::contains_key(&app_id) == false,
+                MultiGomokuInfoMap::<T>::contains_key(&app_id) == false,
                 "AppId already exists"
             );
-            ensure!(
-                initiate_request.players.len() == 2,
-                "invalid player length"
-            );
+
+            // check whether account is asscending order
+            Self::boolean_ordered_account(initiate_request.players.clone())?;
 
             let gomoku_state = GomokuState {
                 board_state: None,
@@ -147,48 +150,49 @@ decl_module! {
                 max_stone_onchain: initiate_request.max_stone_onchain,
             };
             let gomoku_info = GomokuInfoOf::<T> {
-                nonce: initiate_request.nonce,
                 players: initiate_request.players,
+                player_num: initiate_request.player_num,
                 seq_num: 0,
                 timeout: initiate_request.timeout,
                 deadline: Zero::zero(),
                 status: AppStatus::Idle,
                 gomoku_state: gomoku_state,
             };
-            SingleGomokuInfoMap::<T>::insert(app_id, gomoku_info);
+            MultiGomokuInfoMap::<T>::insert(app_id, gomoku_info);
 
             Ok(())
         }
 
-        /// Update state according to an off-chain state proof 
+        /// Update on-chain state according to offchain state proof
         #[weight = 10_000]
         fn update_by_state(
             origin,
             state_proof: StateProofOf<T>
         ) -> DispatchResult {
             ensure_signed(origin)?;
-
+            
             // submit and settle off-chain state
             let mut gomoku_info: GomokuInfoOf<T> = Self::intend_settle(state_proof.clone())?;
 
             let _state = state_proof.app_state.board_state;
+            // u8 winner color + u8 turn color + u8 black ud + 15*15 board state
             ensure!(
-                _state.len() == 227,
-                "invalid board state length"
+                _state.len() == 228,
+                "invalid state length"
             );
 
             let count = 0;
             if _state[0] != 0 {
                 gomoku_info = Self::win_game(_state[0], gomoku_info.clone())?;
             } else {
-                // advance to _state[2];
+                // advance to _state[3]
                 let mut _state_iter = _state.iter();
-                for _i in 0..3 {
+                for _i in 0..4 {
                     _state_iter.next();
                 }
-                // load other states only if winner is not specified
+                // load other states only if winner color is not BLACK or WHITE
                 let count = _state_iter.filter(|&x| *x != 0).count() as u8;
-    
+
                 ensure!(
                     count >= gomoku_info.gomoku_state.min_stone_offchain,
                     "not enough offchain stones"
@@ -204,8 +208,8 @@ decl_module! {
                 max_stone_onchain: gomoku_info.gomoku_state.max_stone_onchain,
             };
             let new_gomoku_info = GomokuInfoOf::<T> {
-                nonce: gomoku_info.nonce,
                 players: gomoku_info.players,
+                player_num: gomoku_info.player_num,
                 seq_num: gomoku_info.seq_num,
                 timeout: gomoku_info.timeout,
                 deadline: gomoku_info.deadline,
@@ -213,8 +217,8 @@ decl_module! {
                 gomoku_state: new_gomoku_state,
             };
             let app_id = state_proof.app_state.app_id;
-            SingleGomokuInfoMap::<T>::mutate(app_id, |info| *info = Some(new_gomoku_info.clone()));
-            
+            MultiGomokuInfoMap::<T>::mutate(app_id, |info| *info = Some(new_gomoku_info.clone()));
+
             Self::deposit_event(RawEvent::IntendSettle(app_id, new_gomoku_info.seq_num));
 
             Ok(())
@@ -228,17 +232,34 @@ decl_module! {
             action: Vec<u8>
         ) -> DispatchResult {
             let caller = ensure_signed(origin)?;
-            
+
             // apply an action to the on-chain state
             let gomoku_info = Self::apply_action(app_id)?;
             let gomoku_state = gomoku_info.gomoku_state.clone();
-            let mut board_state = gomoku_info.gomoku_state.board_state.unwrap();
-            let turn = board_state[1];
+            let mut board_state = match gomoku_state.board_state {
+                Some(state) => state,
+                None => Err(Error::<T>::EmptyBoardState)?,
+            };
+            let turn_color: usize = board_state[1] as usize;
+            // black player index, smaller (=1) or larger(=2) addr
+            let black_id = board_state[2];
+            if black_id == 1 {
+                ensure!(
+                    caller == gomoku_info.players[turn_color - 1],
+                    "Not your turn"
+                );
+            } else if black_id == 2 {
+                ensure!(
+                    caller == gomoku_info.players[2 - turn_color],
+                    "Not your turn"
+                )
+            } else {
+                Err(Error::<T>::InvalidBlackId)?
+            }
             ensure!(
-                caller == gomoku_info.players[turn as usize - 1],
-                "not your turn"    
+                action.len() == 2,
+                "invalid action length"
             );
-
             let x = action[0];
             let y = action[1];
             ensure!(
@@ -252,7 +273,7 @@ decl_module! {
             );
 
             // place the stone
-            board_state[index] = turn;
+            board_state[index] = turn_color as u8;
             let new_stone_num = gomoku_state.stone_num.unwrap() + 1;
             let new_stone_num_onchain = gomoku_state.stone_num_onchain.unwrap() + 1;
             let new_gomoku_state_1 = GomokuState {
@@ -264,15 +285,15 @@ decl_module! {
                 max_stone_onchain: gomoku_state.max_stone_onchain,
             };
             let mut new_gomoku_info_1 = GomokuInfoOf::<T> {
-                nonce: gomoku_info.nonce,
                 players: gomoku_info.players.clone(),
+                player_num: gomoku_info.player_num,
                 seq_num: gomoku_info.seq_num,
                 timeout: gomoku_info.timeout,
                 deadline: gomoku_info.deadline,
                 status: gomoku_info.status.clone(),
                 gomoku_state: new_gomoku_state_1,
             };
-            SingleGomokuInfoMap::<T>::mutate(app_id, |info| *info = Some(new_gomoku_info_1.clone()));
+            MultiGomokuInfoMap::<T>::mutate(app_id, |info| *info = Some(new_gomoku_info_1.clone()));
 
             // check if there is five-in-a-row including this new stone
             if Self::check_five(board_state.clone(), x, y, 1, 0) // horizontal bidirection
@@ -280,15 +301,14 @@ decl_module! {
                 || Self::check_five(board_state.clone(), x, y, 1, 1) // main-diagonal bidirection
                 || Self::check_five(board_state.clone(), x, y, 1, -1) // anti-diagonal bidirection
             {
-                new_gomoku_info_1 = Self::win_game(turn, new_gomoku_info_1)?;
-                SingleGomokuInfoMap::<T>::mutate(app_id, |info| *info = Some(new_gomoku_info_1));
+                new_gomoku_info_1 = Self::win_game(turn_color as u8, new_gomoku_info_1)?;
+                MultiGomokuInfoMap::<T>::mutate(app_id, |info| *info = Some(new_gomoku_info_1));
                 return Ok(());
             }
 
             if new_stone_num == 225 
                 || new_stone_num_onchain as u8 > gomoku_state.max_stone_onchain {
                     // all slots occupied, game is over with no winner
-                    // set turn 0
                     board_state[1] = 0;
                     let new_gomoku_state_2 = GomokuState {
                         board_state: Some(board_state),
@@ -299,22 +319,22 @@ decl_module! {
                         max_stone_onchain: gomoku_state.max_stone_onchain,
                     };
                     let new_gomoku_info_2 = GomokuInfoOf::<T> {
-                        nonce: gomoku_info.nonce,
                         players: gomoku_info.players,
+                        player_num: gomoku_info.player_num,
                         seq_num: gomoku_info.seq_num,
                         timeout: gomoku_info.timeout,
                         deadline: gomoku_info.deadline,
                         status: AppStatus::Finalized,
                         gomoku_state: new_gomoku_state_2,
                     };
-                    SingleGomokuInfoMap::<T>::mutate(app_id, |info| *info = Some(new_gomoku_info_2.clone()));
+                    MultiGomokuInfoMap::<T>::mutate(app_id, |info| *info = Some(new_gomoku_info_2.clone()));
             } else {
                 // toggle turn and update game phase
-                if turn == 1 {
-                    // set turn 2
+                if turn_color == Color::Black as usize {
+                    // set turn color white
                     board_state[1] = 2;
                 } else {
-                    // set turn 1
+                    // set turn color black
                     board_state[1] = 1;
                 }
                 let new_gomoku_state_2 = GomokuState {
@@ -326,15 +346,15 @@ decl_module! {
                     max_stone_onchain: gomoku_state.max_stone_onchain,
                 };
                 let new_gomoku_info_2 = GomokuInfoOf::<T> {
-                    nonce: gomoku_info.nonce,
                     players: gomoku_info.players,
+                    player_num: gomoku_info.player_num,
                     seq_num: gomoku_info.seq_num,
                     timeout: gomoku_info.timeout,
                     deadline: gomoku_info.deadline,
                     status: gomoku_info.status,
                     gomoku_state: new_gomoku_state_2,
                 };
-                SingleGomokuInfoMap::<T>::mutate(app_id, |info| *info = Some(new_gomoku_info_2.clone()));
+                MultiGomokuInfoMap::<T>::mutate(app_id, |info| *info = Some(new_gomoku_info_2.clone()));
             }
 
             Ok(())
@@ -343,18 +363,18 @@ decl_module! {
         /// Check whether app is finalized
         #[weight = 10_000]
         pub fn get_finalized(
-            origin,
-            app_id: T::Hash
+           origin,
+           app_id: T::Hash
         ) -> DispatchResult {
             ensure_signed(origin)?;
-            let gomoku_info = match SingleGomokuInfoMap::<T>::get(app_id) {
+            let gomoku_info = match MultiGomokuInfoMap::<T>::get(app_id) {
                 Some(info) => info,
-                None => Err(Error::<T>::SingleGomokuInfoNotExist)?,
+                None => Err(Error::<T>::MultiGomokuInfoNotExist)?,
             };
 
             // If app is not finalized, return Error::<T>::NotFinalized
             ensure!(
-                gomoku_info.status ==  AppStatus::Finalized,
+                gomoku_info.status == AppStatus::Finalized,
                 Error::<T>::NotFinalized
             );
 
@@ -370,46 +390,47 @@ decl_module! {
             query: u8,
         ) -> DispatchResult {
             ensure_signed(origin)?;
-            let gomoku_info = match SingleGomokuInfoMap::<T>::get(app_id) {
+            let gomoku_info = match MultiGomokuInfoMap::<T>::get(app_id) {
                 Some(info) => info,
-                None => Err(Error::<T>::SingleGomokuInfoNotExist)?,
+                None => Err(Error::<T>::MultiGomokuInfoNotExist)?,
             };
             let board_state = match gomoku_info.gomoku_state.board_state {
                 Some(state) => state,
                 None => Err(Error::<T>::EmptyBoardState)?,
             };
-            
+
             // If outcome is false, return Error::<T>::OutcomeFalse
             ensure!(
                 board_state[0] == query,
                 Error::<T>::OutcomeFalse
             );
-            
-            // If outcome is true, return Ok(())
+
+            // If outcome is ture, return Ok(())
             Ok(())
         }
 
-        /// Finalized based on current state in case of on-chain action timeout
+        /// Finalize the app based on current state in case of on-chain action timeout
         #[weight = 10_000]
-        fn finalize_on_action_timeout(
+        fn finalize_on_timeout(
             origin,
             app_id: T::Hash
         ) -> DispatchResult {
-            let gomoku_info = match SingleGomokuInfoMap::<T>::get(app_id) {
+            ensure_signed(origin)?;
+            let gomoku_info = match MultiGomokuInfoMap::<T>::get(app_id) {
                 Some(info) => info,
-                None => Err(Error::<T>::SingleGomokuInfoNotExist)?,
+                None => Err(Error::<T>::MultiGomokuInfoNotExist)?,
             };
 
             let block_number = frame_system::Module::<T>::block_number();
             if gomoku_info.status == AppStatus::Action {
                 ensure!(
-                    block_number > gomoku_info.deadline,
-                    "deadline no passes"
+                    block_number >  gomoku_info.deadline,
+                    "deadline does not passes"
                 );
             } else if gomoku_info.status == AppStatus::Settle {
                 ensure!(
                     block_number > gomoku_info.deadline + gomoku_info.timeout,
-                    "while settling"
+                    "while setting"
                 );
             } else {
                 return Ok(());
@@ -419,12 +440,13 @@ decl_module! {
                 Some(state) => state,
                 None => Err(Error::<T>::EmptyBoardState)?,
             };
-            if board_state[1] == 1 {
-                let new_gomoku_info = Self::win_game(2, gomoku_info)?;
-                SingleGomokuInfoMap::<T>::mutate(app_id, |info| *info = Some(new_gomoku_info.clone()));
-            } else if board_state[1] == 2 {
+
+            if board_state[1] == Color::Black as u8 {
+                let new_gomoku_info = Self::win_game(0, gomoku_info)?;
+                MultiGomokuInfoMap::<T>::mutate(app_id, |info| *info = Some(new_gomoku_info));
+            } else if board_state[1] == Color::White as u8 {
                 let new_gomoku_info = Self::win_game(1, gomoku_info)?;
-                SingleGomokuInfoMap::<T>::mutate(app_id, |info| *info = Some(new_gomoku_info.clone()));
+                MultiGomokuInfoMap::<T>::mutate(app_id, |info| *info = Some(new_gomoku_info));
             } else {
                 return Ok(());
             }
@@ -435,7 +457,7 @@ decl_module! {
 }
 
 decl_event! (
-    pub enum Event<T> where 
+    pub enum Event<T> where
         <T as system::Trait>::Hash
     {
         /// IntendSettle(app_id, seq_num)
@@ -445,26 +467,28 @@ decl_event! (
 
 decl_error! {
     pub enum Error for Module<T: Trait> {
-        // SingleGomokuInfo is not exist
-        SingleGomokuInfoNotExist,
+        // MultiGomokuInfo is not exist
+        MultiGomokuInfoNotExist,
         // BoardState is empty
         EmptyBoardState,
+        // BlackId is invalid
+        InvalidBlackId,
         // App outcome is false
         OutcomeFalse,
-        // App status is not Finalized
+        // App status is not finalized
         NotFinalized,
     }
 }
 
 impl<T: Trait> Module<T> {
-    /// Submit and settle off-chain state
+    /// Submit and settle offchain state
     fn intend_settle(
         state_proof: StateProofOf<T>
     ) -> Result<GomokuInfoOf<T>, DispatchError> {
         let app_state = state_proof.app_state;
-        let gomoku_info = match SingleGomokuInfoMap::<T>::get(app_state.app_id) {
+        let gomoku_info = match MultiGomokuInfoMap::<T>::get(app_state.app_id) {
             Some(info) => info,
-            None => Err(Error::<T>::SingleGomokuInfoNotExist)?,
+            None => Err(Error::<T>::MultiGomokuInfoNotExist)?,
         };
         let encoded = Self::encode_app_state(app_state.clone());
         Self::valid_signers(state_proof.sigs, &encoded, gomoku_info.players.clone())?;
@@ -472,10 +496,7 @@ impl<T: Trait> Module<T> {
             gomoku_info.status != AppStatus::Finalized,
             "app state is finalized"
         );
-        ensure!(
-            app_state.nonce == gomoku_info.nonce,
-            "nonce not match"
-        );
+    
         ensure!(
             gomoku_info.seq_num < app_state.seq_num,
             "invalid sequence number"
@@ -483,11 +504,11 @@ impl<T: Trait> Module<T> {
 
         let block_number = frame_system::Module::<T>::block_number();
         let new_gomoku_info = GomokuInfoOf::<T> {
-            nonce: gomoku_info.nonce,
             players: gomoku_info.players,
-            seq_num: app_state.seq_num,
+            player_num: gomoku_info.player_num,
+            seq_num: gomoku_info.seq_num,
             timeout: gomoku_info.timeout,
-            deadline: block_number + gomoku_info.timeout,
+            deadline: block_number + gomoku_info.deadline,
             status: AppStatus::Settle,
             gomoku_state: gomoku_info.gomoku_state,
         };
@@ -499,9 +520,9 @@ impl<T: Trait> Module<T> {
     fn apply_action(
         app_id: T::Hash
     ) -> Result<GomokuInfoOf<T>, DispatchError> {
-        let gomoku_info = match SingleGomokuInfoMap::<T>::get(app_id) {
+        let gomoku_info = match MultiGomokuInfoMap::<T>::get(app_id) {
             Some(info) => info,
-            None => Err(Error::<T>::SingleGomokuInfoNotExist)?,
+            None => Err(Error::<T>::MultiGomokuInfoNotExist)?,
         };
         ensure!(
             gomoku_info.status != AppStatus::Finalized,
@@ -512,8 +533,8 @@ impl<T: Trait> Module<T> {
         let new_gomoku_info: GomokuInfoOf<T>;
         if gomoku_info.status == AppStatus::Settle && block_number > gomoku_info.deadline {
             new_gomoku_info = GomokuInfoOf::<T> {
-                nonce: gomoku_info.nonce,
                 players: gomoku_info.players,
+                player_num: gomoku_info.player_num,
                 seq_num:  gomoku_info.seq_num + 1,
                 timeout: gomoku_info.timeout,
                 deadline: block_number + gomoku_info.timeout,
@@ -526,8 +547,8 @@ impl<T: Trait> Module<T> {
                 "app not in action mode"
             );
             new_gomoku_info = GomokuInfoOf::<T> {
-                nonce: gomoku_info.nonce,
                 players: gomoku_info.players,
+                player_num: gomoku_info.player_num,
                 seq_num:  gomoku_info.seq_num + 1,
                 timeout: gomoku_info.timeout,
                 deadline: block_number + gomoku_info.timeout,
@@ -536,79 +557,96 @@ impl<T: Trait> Module<T> {
             };
         }
 
-        Ok(new_gomoku_info)        
+        Ok(new_gomoku_info) 
     }
     
     /// get app id
     fn calculate_app_id(
         initiate_request: AppInitiateRequestOf<T>
     ) -> T::Hash {
-        let single_gomoku_app_account = Self::app_account();
-        let mut encoded = single_gomoku_app_account.encode();
+        let multi_gomoku_app_account = Self::app_account();
+        let mut encoded = multi_gomoku_app_account.encode();
         encoded.extend(initiate_request.nonce.encode());
-        encoded.extend(initiate_request.players[0].encode());
-        encoded.extend(initiate_request.players[1].encode());
         encoded.extend(initiate_request.timeout.encode());
+        initiate_request.players.into_iter()
+            .for_each(|players| { encoded.extend(players.encode()); });
         let app_id = T::Hashing::hash(&encoded);
         return app_id;
     }
 
     /// get app state
     pub fn get_state(app_id: T::Hash, key: u8) -> Option<Vec<u8>> {
-        let gomoku_info = match SingleGomokuInfoMap::<T>::get(app_id) {
+        let gomoku_info = match MultiGomokuInfoMap::<T>::get(app_id) {
             Some(info) => info,
             None => return None
         };
         let board_state = gomoku_info.gomoku_state.board_state.unwrap();
-        if key == StateKey::Winner as u8 {
-            return Some(vec![board_state[0]]);
-        } else if key == StateKey::Turn as u8 {
-            return Some(vec![board_state[1]]);
+        if key == StateKey::WinnerColor as u8 {
+            let state = vec![board_state[0]];
+            return Some(state);
+        } else if key == StateKey::TurnColor as u8 {
+            let state = vec![board_state[1]];
+            return Some(state);
         } else {
             return Some(board_state);
         }
     }
 
-    /// get single gomoku app account id
+    /// get multi gomoku app account id
     pub fn app_account() -> T::AccountId {
-        SINGLE_GOMOKU_ID.into_account()
+        MULTI_GOMOKU_ID.into_account()
     }
 
+    /// check whether account is assceding order
+    fn boolean_ordered_account(
+        players: Vec<T::AccountId>
+    ) -> Result<(), DispatchError> {
+        let mut prev = &players[0];
+        for i in 1..players.len() {
+            ensure!(
+                prev < &players[1],
+                "player is not ascending order"
+            );
+            prev = &players[i];
+        }
+
+        Ok(())
+    }
+
+    /// check signature
     fn valid_signers(
         signatures: Vec<<T as Trait>::Signature>,
         encoded: &[u8],
         signers: Vec<T::AccountId>,
-    ) -> DispatchResult {
-        let signature1 = &signatures[0];
-        let signature2 = &signatures[1];
-        ensure!(
-            (signature1.verify(encoded, &signers[0]) && signature2.verify(encoded, &signers[1]))
-                || (signature1.verify(encoded, &signers[1])
-                    && signature2.verify(encoded, &signers[0])),
-            "Check co-sigs failed"
-        );
+    ) -> Result<(), DispatchError> {
+        for i in 0..signers.len() {
+            let signature = &signatures[i];
+            ensure!(
+                signature.verify(encoded, &signers[i]),
+                "Check co-sigs failed"
+            );
+        }
 
         Ok(())
     }
 
     /// Set game states when there is a winner
     fn win_game(
-        winner: u8, 
-        gomoku_info: GomokuInfoOf<T>,
+        winner: u8,
+        gomoku_info: GomokuInfoOf<T>
     ) -> Result<GomokuInfoOf<T>, DispatchError> {
         ensure!(
             u8::min_value() <= winner && winner <= 2,
             "invalid winner state"
         );
-
         let gomoku_state = gomoku_info.gomoku_state;
-        let mut new_board_state = gomoku_state.board_state.unwrap_or(vec![0; 227]);
-        // set winner
+        let mut new_board_state = gomoku_state.board_state.unwrap_or(vec![0; 228]);
+        // set winner color
         new_board_state[0] = winner;
 
         let new_gomoku_info: GomokuInfoOf<T>;
         if winner != 0 {// Game over
-            // set turn 0
+            // set turn color 0
             new_board_state[1] = 0; 
 
             let new_gomoku_state = GomokuState {
@@ -621,8 +659,8 @@ impl<T: Trait> Module<T> {
             };
             
             new_gomoku_info = GomokuInfoOf::<T> {
-                nonce: gomoku_info.nonce,
                 players: gomoku_info.players,
+                player_num: gomoku_info.player_num,
                 seq_num: gomoku_info.seq_num,
                 timeout: gomoku_info.timeout,
                 deadline: gomoku_info.deadline,
@@ -639,8 +677,8 @@ impl<T: Trait> Module<T> {
                 max_stone_onchain: gomoku_state.max_stone_onchain
             };
             new_gomoku_info = GomokuInfoOf::<T> {
-                nonce: gomoku_info.nonce,
                 players: gomoku_info.players,
+                player_num: gomoku_info.player_num,
                 seq_num: gomoku_info.seq_num,
                 timeout: gomoku_info.timeout,
                 deadline: gomoku_info.deadline,
@@ -704,19 +742,17 @@ impl<T: Trait> Module<T> {
         }
     }
 
-    /// Check if coordinate (x, y) is valid
     fn state_index(x: u8, y: u8) -> usize {
         // board dimention is 15*15
         let board_dimention = 15;
-        let index: usize = (2 + board_dimention * x + y) as usize;
+        let index = (3 + board_dimention * x + y) as usize;
         return index;
     }
 
     fn encode_app_state(
         app_state: AppStateOf<T>
     ) -> Vec<u8> {
-        let mut encoded = app_state.nonce.encode();
-        encoded.extend(app_state.seq_num.encode());
+        let mut encoded = app_state.seq_num.encode();
         app_state.board_state.iter()
             .for_each(|state| { encoded.extend(state.encode()); });
         encoded.extend(app_state.timeout.encode());
@@ -724,5 +760,4 @@ impl<T: Trait> Module<T> {
 
         return encoded;
     }
-
-} 
+}

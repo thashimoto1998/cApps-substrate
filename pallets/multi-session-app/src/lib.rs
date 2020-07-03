@@ -20,10 +20,10 @@ use sp_std::{prelude::*, vec::Vec};
 
 #[derive(Clone, Eq, PartialEq, PartialOrd, Ord, Encode, Decode, RuntimeDebug)]
 pub struct SessionInitiateRequest<AccountId, BlockNumber> {
-    pub nonce: u128,
-    pub player_num: u8,
-    pub players: Vec<AccountId>,
-    pub timeout: BlockNumber,
+    nonce: u128,
+    player_num: u8,
+    players: Vec<AccountId>,
+    timeout: BlockNumber,
 }
 
 pub type SessionInitiateRequestOf<T> = SessionInitiateRequest<
@@ -33,10 +33,10 @@ pub type SessionInitiateRequestOf<T> = SessionInitiateRequest<
 
 #[derive(Clone, Eq, PartialEq, PartialOrd, Ord, Encode, Decode, RuntimeDebug)]
 pub struct AppState<BlockNumber, Hash> {
-    pub seq_num: u128,
-    pub state: u8,
-    pub timeout: BlockNumber,
-    pub session_id: Hash,
+    seq_num: u128,
+    state: u8,
+    timeout: BlockNumber,
+    session_id: Hash,
 }
 
 pub type AppStateOf<T> = AppState<
@@ -46,8 +46,8 @@ pub type AppStateOf<T> = AppState<
 
 #[derive(Clone, Eq, PartialEq, PartialOrd, Ord, Encode, Decode, RuntimeDebug)]
 pub struct StateProof<BlockNumber, Hash, Signature> {
-    pub app_state: AppState<BlockNumber, Hash>,
-    pub sigs: Vec<Signature>,
+    app_state: AppState<BlockNumber, Hash>,
+    sigs: Vec<Signature>,
 }
 
 pub type StateProofOf<T> = StateProof<
@@ -66,13 +66,13 @@ pub enum SessionStatus {
 
 #[derive(Clone, Eq, PartialEq, PartialOrd, Ord, Encode, Decode, RuntimeDebug)]
 pub struct SessionInfo<AccountId, BlockNumber> {
-    pub state: u8,
-    pub players: Vec<AccountId>,
-    pub player_num: u8,
-    pub seq_num: u128,
-    pub timeout: BlockNumber,
-    pub deadline: BlockNumber,
-    pub status: SessionStatus,
+    state: u8,
+    players: Vec<AccountId>,
+    player_num: u8,
+    seq_num: u128,
+    timeout: BlockNumber,
+    deadline: BlockNumber,
+    status: SessionStatus,
 }
 
 pub type SessionInfoOf<T> = SessionInfo<
@@ -112,6 +112,9 @@ decl_module!  {
                 SessionInfoMap::<T>::contains_key(&session_id) == false,
                 "session_id is used"
             );
+            
+            // check whether account is asscending order
+            Self::boolean_ordered_account(initiate_request.players.clone())?;
 
             let session_info = SessionInfoOf::<T> {
                 state: 0,
@@ -481,7 +484,7 @@ impl<T: Trait> Module<T> {
         Ok(())
     }
 
-    /// check whether accoun is asscending order
+    /// check whether account is asscending order
     pub fn boolean_ordered_account(
         players: Vec<T::AccountId>
     ) -> Result<(), DispatchError> {
