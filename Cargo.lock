@@ -815,6 +815,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "multi-gomoku"
+version = "0.8.3"
+dependencies = [
+ "frame-support",
+ "frame-system",
+ "pallet-balances",
+ "parity-scale-codec",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
 name = "multi-session-app"
 version = "0.8.3"
 dependencies = [
