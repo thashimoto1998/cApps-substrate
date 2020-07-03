@@ -2,8 +2,8 @@
 
 mod mock;
 
-//#[cfg(test)]
-//mod tests;
+#[cfg(test)]
+mod tests;
 
 use codec::{Decode, Encode};
 use frame_support::{
@@ -232,7 +232,7 @@ decl_module! {
             // apply an action to the on-chain state
             let gomoku_info = Self::apply_action(app_id)?;
             let gomoku_state = gomoku_info.gomoku_state.clone();
-            let mut board_state = gomoku_info.gomoku_state.board_state.unwrap();
+            let mut board_state = gomoku_info.gomoku_state.board_state.unwrap_or(vec![0; 227]);
             let turn = board_state[1];
             ensure!(
                 caller == gomoku_info.players[turn as usize - 1],
@@ -253,8 +253,8 @@ decl_module! {
 
             // place the stone
             board_state[index] = turn;
-            let new_stone_num = gomoku_state.stone_num.unwrap() + 1;
-            let new_stone_num_onchain = gomoku_state.stone_num_onchain.unwrap() + 1;
+            let new_stone_num = gomoku_state.stone_num.unwrap_or(0) + 1;
+            let new_stone_num_onchain = gomoku_state.stone_num_onchain.unwrap_or(0) + 1;
             let new_gomoku_state_1 = GomokuState {
                 board_state: Some(board_state.clone()),
                 stone_num: Some(new_stone_num),
@@ -457,6 +457,51 @@ decl_error! {
 }
 
 impl<T: Trait> Module<T> {
+    /// get state settle fianlized time
+    pub fn get_settle_finalized_time(app_id: T::Hash) -> Option<T::BlockNumber> {
+        let gomoku_info = match SingleGomokuInfoMap::<T>::get(app_id) {
+            Some(info) => info,
+            None => return None
+        };
+        if gomoku_info.status == AppStatus::Settle {
+            return Some(gomoku_info.deadline);
+        }
+
+        return None;
+    }
+
+    /// get action deadline
+    pub fn get_action_deadline(app_id: T::Hash) -> Option<T::BlockNumber> {
+        let gomoku_info = match SingleGomokuInfoMap::<T>::get(app_id) {
+            Some(info) => info,
+            None => return None
+        };
+        if gomoku_info.status == AppStatus::Action {
+            return Some(gomoku_info.deadline);
+        } else if gomoku_info.status ==  AppStatus::Settle {
+            return Some(gomoku_info.deadline + gomoku_info.timeout);
+        } else {
+            return None;
+        }
+    }
+
+    /// get app state
+    pub fn get_state(app_id: T::Hash, key: u8) -> Option<Vec<u8>> {
+        let gomoku_info = match SingleGomokuInfoMap::<T>::get(app_id) {
+            Some(info) => info,
+            None => return None
+        };
+        let board_state = gomoku_info.gomoku_state.board_state.unwrap();
+        if key == StateKey::Winner as u8 {
+            return Some(vec![board_state[0]]);
+        } else if key == StateKey::Turn as u8 {
+            return Some(vec![board_state[1]]);
+        } else {
+            return Some(board_state);
+        }
+    }
+
+
     /// Submit and settle off-chain state
     fn intend_settle(
         state_proof: StateProofOf<T>
@@ -551,22 +596,6 @@ impl<T: Trait> Module<T> {
         encoded.extend(initiate_request.timeout.encode());
         let app_id = T::Hashing::hash(&encoded);
         return app_id;
-    }
-
-    /// get app state
-    pub fn get_state(app_id: T::Hash, key: u8) -> Option<Vec<u8>> {
-        let gomoku_info = match SingleGomokuInfoMap::<T>::get(app_id) {
-            Some(info) => info,
-            None => return None
-        };
-        let board_state = gomoku_info.gomoku_state.board_state.unwrap();
-        if key == StateKey::Winner as u8 {
-            return Some(vec![board_state[0]]);
-        } else if key == StateKey::Turn as u8 {
-            return Some(vec![board_state[1]]);
-        } else {
-            return Some(board_state);
-        }
     }
 
     /// get single gomoku app account id
