@@ -107,14 +107,14 @@ decl_module!  {
             origin,
             initiate_request: SessionInitiateRequestOf<T>
         ) -> DispatchResult {
-            let session_id = Self::calculate_session_id(initiate_request.clone());
+            let session_id = Self::get_session_id(initiate_request.nonce, initiate_request.players.clone());
             ensure!(
                 SessionInfoMap::<T>::contains_key(&session_id) == false,
                 "session_id is used"
             );
             
             // check whether account is asscending order
-            Self::boolean_ordered_account(initiate_request.players.clone())?;
+            Self::is_ordered_account(initiate_request.players.clone())?;
 
             let session_info = SessionInfoOf::<T> {
                 state: 0,
@@ -264,7 +264,7 @@ decl_module!  {
 
         /// Check whether session is finalized
         #[weight = 10_000]
-        pub fn get_finalized(
+        pub fn is_finalized(
             origin,
             session_id: T::Hash,
         ) -> DispatchResult {
@@ -307,6 +307,84 @@ decl_error! {
 }
 
 impl<T: Trait> Module<T> {
+    /// get session id
+    pub fn get_session_id(
+        nonce: u128,
+        players: Vec<T::AccountId>,
+    ) -> T::Hash {
+        let multi_session_app_account = Self::app_account();
+        let mut encoded = multi_session_app_account.encode();
+        encoded.extend(nonce.encode());
+        players.into_iter()
+            .for_each(|players| { encoded.extend(players.encode()); });
+        let session_id = T::Hashing::hash(&encoded);
+        return session_id;
+    }
+
+    /// get session state
+    pub fn get_state(session_id: T::Hash) -> Option<u8> {
+        let session_info = match SessionInfoMap::<T>::get(session_id) {
+            Some(session) => session,
+            None => return None,
+        };
+
+        return Some(session_info.state);
+    }
+
+    /// get session status
+    pub fn get_status(session_id: T::Hash) -> Option<SessionStatus> {
+        let session_info = match SessionInfoMap::<T>::get(session_id) {
+            Some(session) => session,
+            None => return None,
+        };
+
+        return Some(session_info.status);
+    }
+
+    /// get state settle finalized time
+    pub fn get_settle_finalized_time(session_id: T::Hash) -> Option<T::BlockNumber> {
+        let session_info = match SessionInfoMap::<T>::get(session_id) {
+            Some(session) => session,
+            None => return None,
+        };
+
+        if session_info.status == SessionStatus::Settle {
+            return Some(session_info.deadline);
+        }
+
+        return None;
+    }
+
+    /// get action deadline
+    pub fn get_action_deadline(session_id: T::Hash) -> Option<T::BlockNumber> {
+        let session_info = match SessionInfoMap::<T>::get(session_id) {
+            Some(session) => session,
+            None => return None,
+        };
+        if session_info.status == SessionStatus::Action {
+            return Some(session_info.deadline);
+        } else if session_info.status == SessionStatus::Settle {
+            return Some(session_info.deadline + session_info.timeout);
+        } else {
+            return None;
+        }
+    }
+
+    /// get session sequence number
+    pub fn get_seq_num(session_id: T::Hash) -> Option<u128> {
+        let session_info = match SessionInfoMap::<T>::get(session_id) {
+            Some(session) => session,
+            None => return None,
+        };     
+        return Some(session_info.seq_num);
+    }
+
+
+    /// get multi session app account id
+    pub fn app_account() -> T::AccountId {
+        MULTI_SESSION_APP_ID.into_account()
+    }
+
     fn intend_settle(
         state_proof: StateProofOf<T>
     ) -> Result<SessionInfoOf<T>, DispatchError> {
@@ -389,86 +467,8 @@ impl<T: Trait> Module<T> {
         Ok(new_session_info)
     }
 
-    /// get session id
-    pub fn calculate_session_id(
-        initiate_request: SessionInitiateRequestOf<T>
-    ) -> T::Hash {
-        let multi_session_app_account = Self::app_account();
-        let mut encoded = multi_session_app_account.encode();
-        encoded.extend(initiate_request.nonce.encode());
-        encoded.extend(initiate_request.timeout.encode());
-        initiate_request.players.into_iter()
-            .for_each(|players| { encoded.extend(players.encode()); });
-        let session_id = T::Hashing::hash(&encoded);
-        return session_id;
-    }
-
-    /// get session state
-    pub fn get_state(session_id: T::Hash) -> Option<u8> {
-        let session_info = match SessionInfoMap::<T>::get(session_id) {
-            Some(session) => session,
-            None => return None,
-        };
-
-        return Some(session_info.state);
-    }
-
-    /// get session status
-    pub fn get_status(session_id: T::Hash) -> Option<SessionStatus> {
-        let session_info = match SessionInfoMap::<T>::get(session_id) {
-            Some(session) => session,
-            None => return None,
-        };
-
-        return Some(session_info.status);
-    }
-
-    /// get state settle finalized time
-    pub fn get_settle_finalized_time(session_id: T::Hash) -> Option<T::BlockNumber> {
-        let session_info = match SessionInfoMap::<T>::get(session_id) {
-            Some(session) => session,
-            None => return None,
-        };
-
-        if session_info.status == SessionStatus::Settle {
-            return Some(session_info.deadline);
-        }
-
-        return None;
-    }
-
-    /// get action deadline
-    pub fn get_action_deadline(session_id: T::Hash) -> Option<T::BlockNumber> {
-        let session_info = match SessionInfoMap::<T>::get(session_id) {
-            Some(session) => session,
-            None => return None,
-        };
-        if session_info.status == SessionStatus::Action {
-            return Some(session_info.deadline);
-        } else if session_info.status == SessionStatus::Settle {
-            return Some(session_info.deadline + session_info.timeout);
-        } else {
-            return None;
-        }
-    }
-
-    /// get session sequence number
-    pub fn get_seq_num(session_id: T::Hash) -> Option<u128> {
-        let session_info = match SessionInfoMap::<T>::get(session_id) {
-            Some(session) => session,
-            None => return None,
-        };     
-        return Some(session_info.seq_num);
-    }
-
-
-    /// get multi session app account id
-    pub fn app_account() -> T::AccountId {
-        MULTI_SESSION_APP_ID.into_account()
-    }
-
     /// check signature
-    pub fn valid_signers(
+    fn valid_signers(
         signatures: Vec<<T as Trait>::Signature>,
         encoded: &[u8],
         signers: Vec<T::AccountId>,
@@ -485,7 +485,7 @@ impl<T: Trait> Module<T> {
     }
 
     /// check whether account is asscending order
-    pub fn boolean_ordered_account(
+    fn is_ordered_account(
         players: Vec<T::AccountId>
     ) -> Result<(), DispatchError> {
         let mut prev = &players[0];
@@ -500,7 +500,7 @@ impl<T: Trait> Module<T> {
         Ok(())
     }
 
-    pub fn encode_app_state(
+    fn encode_app_state(
         app_state: AppStateOf<T>
     ) -> Vec<u8> {
         let mut encoded = app_state.seq_num.encode();

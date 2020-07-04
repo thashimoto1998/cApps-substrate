@@ -48,7 +48,6 @@ version = '2.0.0-rc3'
 
 [package]
 authors = ['Celer']
-description = 'FRAME pallet template'
 edition = '2018'
 license = 'MIT license'
 name = 'single-gomoku'

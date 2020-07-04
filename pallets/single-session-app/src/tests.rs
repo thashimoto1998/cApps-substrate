@@ -43,7 +43,7 @@ fn test_fail_update_by_action() {
             initiate_request.clone()
         ));
 
-        let app_id = SingleApp::calculate_app_id(initiate_request);
+        let app_id = SingleApp::get_app_id(initiate_request.nonce, initiate_request.players.clone());
         assert_noop!(
             SingleApp::update_by_action(
             Origin::signed(players_peers[0]),
@@ -73,7 +73,7 @@ fn test_pass_update_by_state_state_is_5() {
             initiate_request.clone()
         ));
 
-        let app_id = SingleApp::calculate_app_id(initiate_request);
+        let app_id = SingleApp::get_app_id(initiate_request.nonce, initiate_request.players.clone());
         let state_proof = get_state_proof(0, 2, 5, 2, app_id, players_pair);
         assert_ok!(
             SingleApp::update_by_state(
@@ -82,9 +82,8 @@ fn test_pass_update_by_state_state_is_5() {
             )
         );
 
-        //let expected_event = TestEvent::single_app(RawEvent::IntendSettle(app_id, 2));       
-        //assert_eq!(system::Module::<TestRuntime>::events().pop().map(|e| e.event), expected_event.into());
-        //assert!(System::events().iter().any(|a| a.event == expected_event)); 
+        let expected_event = TestEvent::single_app(RawEvent::IntendSettle(app_id, 2));       
+        assert!(System::events().iter().any(|a| a.event == expected_event)); 
 
         let app_info = SingleApp::app_info(app_id).unwrap();
         let expected_app_info = AppInfo {
@@ -106,7 +105,7 @@ fn test_pass_update_by_state_state_is_5() {
             )
         );
         assert_noop!(
-            SingleApp::get_finalized(
+            SingleApp::is_finalized(
                 Origin::signed(players_peers[0]),
                 app_id
             ),
@@ -134,7 +133,7 @@ fn test_fail_update_by_action_before_settle_finalized_time_should_fail() {
             initiate_request.clone()
         ));
 
-        let app_id = SingleApp::calculate_app_id(initiate_request);
+        let app_id = SingleApp::get_app_id(initiate_request.nonce, initiate_request.players.clone());
         let state_proof = get_state_proof(0, 2, 5, 2, app_id, players_pair);
         assert_ok!(
             SingleApp::update_by_state(
@@ -173,7 +172,7 @@ fn test_pass_update_by_action_after_settle_finalized_time() {
             initiate_request.clone()
         ));
 
-        let app_id = SingleApp::calculate_app_id(initiate_request);
+        let app_id = SingleApp::get_app_id(initiate_request.nonce, initiate_request.players.clone());
         let state_proof = get_state_proof(0, 2, 5, 2, app_id, players_pair);
         assert_ok!(
             SingleApp::update_by_state(
@@ -220,7 +219,7 @@ fn test_fail_update_by_state_with_invlaid_seq_num() {
             initiate_request.clone()
         ));
 
-        let app_id = SingleApp::calculate_app_id(initiate_request);
+        let app_id = SingleApp::get_app_id(initiate_request.nonce, initiate_request.players.clone());
         let state_proof = get_state_proof(0, 0, 5, 2, app_id, players_pair);
         assert_noop!(
             SingleApp::update_by_state(
@@ -251,7 +250,7 @@ fn test_pass_update_by_state_state_is_2() {
             initiate_request.clone()
         ));
 
-        let app_id = SingleApp::calculate_app_id(initiate_request);
+        let app_id = SingleApp::get_app_id(initiate_request.nonce, initiate_request.players.clone());
         let state_proof = get_state_proof(0, 2, 2, 2, app_id, players_pair);
         assert_ok!(
             SingleApp::update_by_state(
@@ -259,6 +258,8 @@ fn test_pass_update_by_state_state_is_2() {
                 state_proof
             )
         );
+        let expected_event = TestEvent::single_app(RawEvent::IntendSettle(app_id, 2));       
+        assert!(System::events().iter().any(|a| a.event == expected_event)); 
 
         assert_ok!(
             SingleApp::get_outcome(
@@ -268,7 +269,7 @@ fn test_pass_update_by_state_state_is_2() {
             )
         );
         assert_ok!(
-            SingleApp::get_finalized(
+            SingleApp::is_finalized(
                 Origin::signed(players_peers[0]),
                 app_id
             )
@@ -294,7 +295,7 @@ fn test_fail_update_by_action_after_finalized() {
             initiate_request.clone()
         ));
 
-        let app_id = SingleApp::calculate_app_id(initiate_request);
+        let app_id = SingleApp::get_app_id(initiate_request.nonce, initiate_request.players.clone());
         let state_proof = get_state_proof(0, 2, 2, 2, app_id, players_pair);
         assert_ok!(
             SingleApp::update_by_state(
@@ -332,7 +333,7 @@ fn test_fail_update_by_state_after_finalized() {
             initiate_request.clone()
         ));
 
-        let app_id = SingleApp::calculate_app_id(initiate_request);
+        let app_id = SingleApp::get_app_id(initiate_request.nonce, initiate_request.players.clone());
         let mut state_proof = get_state_proof(0, 2, 2, 2, app_id, players_pair.clone());
         assert_ok!(
             SingleApp::update_by_state(
@@ -372,7 +373,7 @@ fn test_pass_finalize_on_action_timeout() {
             )
         );
 
-        let session_id = SingleApp::calculate_app_id(initiate_request);
+        let session_id = SingleApp::get_app_id(initiate_request.nonce, initiate_request.players.clone());
         let state_proof = get_state_proof(0, 1, 2, 2, session_id, players_pair.clone());
         assert_ok!(
             SingleApp::update_by_state(

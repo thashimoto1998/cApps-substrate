@@ -128,7 +128,7 @@ decl_module! {
         ) -> DispatchResult {
             ensure_signed(origin)?;
 
-            let app_id = Self::calculate_app_id(initiate_request.clone());
+            let app_id = Self::get_app_id(initiate_request.nonce, initiate_request.players.clone());
             ensure!(
                 SingleGomokuInfoMap::<T>::contains_key(&app_id) == false,
                 "AppId already exists"
@@ -340,9 +340,52 @@ decl_module! {
             Ok(())
         }
 
+        /// Finalized based on current state in case of on-chain action timeout
+        #[weight = 10_000]
+        fn finalize_on_action_timeout(
+            origin,
+            app_id: T::Hash
+        ) -> DispatchResult {
+            let gomoku_info = match SingleGomokuInfoMap::<T>::get(app_id) {
+                Some(info) => info,
+                None => Err(Error::<T>::SingleGomokuInfoNotExist)?,
+            };
+
+            let block_number = frame_system::Module::<T>::block_number();
+            if gomoku_info.status == AppStatus::Action {
+                ensure!(
+                    block_number > gomoku_info.deadline,
+                    "deadline no passes"
+                );
+            } else if gomoku_info.status == AppStatus::Settle {
+                ensure!(
+                    block_number > gomoku_info.deadline + gomoku_info.timeout,
+                    "while settling"
+                );
+            } else {
+                return Ok(());
+            }
+
+            let board_state = match gomoku_info.clone().gomoku_state.board_state {
+                Some(state) => state,
+                None => Err(Error::<T>::EmptyBoardState)?,
+            };
+            if board_state[1] == 1 {
+                let new_gomoku_info = Self::win_game(2, gomoku_info)?;
+                SingleGomokuInfoMap::<T>::mutate(app_id, |info| *info = Some(new_gomoku_info.clone()));
+            } else if board_state[1] == 2 {
+                let new_gomoku_info = Self::win_game(1, gomoku_info)?;
+                SingleGomokuInfoMap::<T>::mutate(app_id, |info| *info = Some(new_gomoku_info.clone()));
+            } else {
+                return Ok(());
+            }
+
+            Ok(())
+        }
+
         /// Check whether app is finalized
         #[weight = 10_000]
-        pub fn get_finalized(
+        pub fn is_finalized(
             origin,
             app_id: T::Hash
         ) -> DispatchResult {
@@ -388,49 +431,6 @@ decl_module! {
             // If outcome is true, return Ok(())
             Ok(())
         }
-
-        /// Finalized based on current state in case of on-chain action timeout
-        #[weight = 10_000]
-        fn finalize_on_action_timeout(
-            origin,
-            app_id: T::Hash
-        ) -> DispatchResult {
-            let gomoku_info = match SingleGomokuInfoMap::<T>::get(app_id) {
-                Some(info) => info,
-                None => Err(Error::<T>::SingleGomokuInfoNotExist)?,
-            };
-
-            let block_number = frame_system::Module::<T>::block_number();
-            if gomoku_info.status == AppStatus::Action {
-                ensure!(
-                    block_number > gomoku_info.deadline,
-                    "deadline no passes"
-                );
-            } else if gomoku_info.status == AppStatus::Settle {
-                ensure!(
-                    block_number > gomoku_info.deadline + gomoku_info.timeout,
-                    "while settling"
-                );
-            } else {
-                return Ok(());
-            }
-
-            let board_state = match gomoku_info.clone().gomoku_state.board_state {
-                Some(state) => state,
-                None => Err(Error::<T>::EmptyBoardState)?,
-            };
-            if board_state[1] == 1 {
-                let new_gomoku_info = Self::win_game(2, gomoku_info)?;
-                SingleGomokuInfoMap::<T>::mutate(app_id, |info| *info = Some(new_gomoku_info.clone()));
-            } else if board_state[1] == 2 {
-                let new_gomoku_info = Self::win_game(1, gomoku_info)?;
-                SingleGomokuInfoMap::<T>::mutate(app_id, |info| *info = Some(new_gomoku_info.clone()));
-            } else {
-                return Ok(());
-            }
-
-            Ok(())
-        }
     }
 }
 
@@ -457,6 +457,46 @@ decl_error! {
 }
 
 impl<T: Trait> Module<T> {
+    /// get app id
+    pub fn get_app_id(
+        nonce: u128,
+        players: Vec<T::AccountId>,
+    ) -> T::Hash {
+        let single_gomoku_app_account = Self::app_account();
+        let mut encoded = single_gomoku_app_account.encode();
+        encoded.extend(nonce.encode());
+        encoded.extend(players[0].encode());
+        encoded.extend(players[1].encode());
+        let app_id = T::Hashing::hash(&encoded);
+        return app_id;
+    }
+
+    /// get app state
+    pub fn get_state(app_id: T::Hash, key: u8) -> Option<Vec<u8>> {
+        let gomoku_info = match SingleGomokuInfoMap::<T>::get(app_id) {
+            Some(info) => info,
+            None => return None
+        };
+        let board_state = gomoku_info.gomoku_state.board_state.unwrap();
+        if key == StateKey::Winner as u8 {
+            return Some(vec![board_state[0]]);
+        } else if key == StateKey::Turn as u8 {
+            return Some(vec![board_state[1]]);
+        } else {
+            return Some(board_state);
+        }
+    }
+
+    /// get app status
+    pub fn get_status(app_id: T::Hash) -> Option<AppStatus> {
+        let gomoku_info = match SingleGomokuInfoMap::<T>::get(app_id) {
+            Some(app) => app,
+            None => return None,
+        };
+
+        return Some(gomoku_info.status);
+    }
+
     /// get state settle fianlized time
     pub fn get_settle_finalized_time(app_id: T::Hash) -> Option<T::BlockNumber> {
         let gomoku_info = match SingleGomokuInfoMap::<T>::get(app_id) {
@@ -485,22 +525,19 @@ impl<T: Trait> Module<T> {
         }
     }
 
-    /// get app state
-    pub fn get_state(app_id: T::Hash, key: u8) -> Option<Vec<u8>> {
+    /// get app sequence number
+    pub fn get_seq_num(app_id: T::Hash) -> Option<u128> {
         let gomoku_info = match SingleGomokuInfoMap::<T>::get(app_id) {
             Some(info) => info,
             None => return None
         };
-        let board_state = gomoku_info.gomoku_state.board_state.unwrap();
-        if key == StateKey::Winner as u8 {
-            return Some(vec![board_state[0]]);
-        } else if key == StateKey::Turn as u8 {
-            return Some(vec![board_state[1]]);
-        } else {
-            return Some(board_state);
-        }
+        return Some(gomoku_info.seq_num);
     }
 
+    /// get single gomoku app account id
+    pub fn app_account() -> T::AccountId {
+        SINGLE_GOMOKU_ID.into_account()
+    }
 
     /// Submit and settle off-chain state
     fn intend_settle(
@@ -582,25 +619,6 @@ impl<T: Trait> Module<T> {
         }
 
         Ok(new_gomoku_info)        
-    }
-    
-    /// get app id
-    fn calculate_app_id(
-        initiate_request: AppInitiateRequestOf<T>
-    ) -> T::Hash {
-        let single_gomoku_app_account = Self::app_account();
-        let mut encoded = single_gomoku_app_account.encode();
-        encoded.extend(initiate_request.nonce.encode());
-        encoded.extend(initiate_request.players[0].encode());
-        encoded.extend(initiate_request.players[1].encode());
-        encoded.extend(initiate_request.timeout.encode());
-        let app_id = T::Hashing::hash(&encoded);
-        return app_id;
-    }
-
-    /// get single gomoku app account id
-    pub fn app_account() -> T::AccountId {
-        SINGLE_GOMOKU_ID.into_account()
     }
 
     fn valid_signers(

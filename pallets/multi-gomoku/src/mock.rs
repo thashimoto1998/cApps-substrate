@@ -110,6 +110,12 @@ pub(crate) fn account_pair(s: &str) -> sr25519::Pair {
     sr25519::Pair::from_string(&format!("//{}", s), None).expect("static values are valid: qed")
 }
 
+pub(crate) fn account_key(s: &str) -> sr25519::Public {
+    sr25519::Pair::from_string(&format!("//{}", s), None)
+        .expect("static values are valid; qed")
+        .public()
+}
+
 pub(crate) fn get_sorted_peer(
     peer_1: sr25519::Pair,
     peer_2: sr25519::Pair,

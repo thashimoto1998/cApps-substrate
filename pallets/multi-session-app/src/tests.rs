@@ -46,7 +46,7 @@ fn test_pass_update_by_state_state_is_5() {
             )
         );
 
-        let session_id = MultiApp::calculate_session_id(initiate_request);
+        let session_id = MultiApp::get_session_id(initiate_request.nonce, initiate_request.players.clone());
         let state_proof = get_state_proof(1, 5, 2, session_id, players_pair);
     
         assert_ok!(
@@ -77,7 +77,7 @@ fn test_pass_update_by_state_state_is_5() {
         );
 
         assert_noop!(
-            MultiApp::get_finalized(
+            MultiApp::is_finalized(
                 Origin::signed(players[0]),
                 session_id,
             ),
@@ -106,7 +106,7 @@ fn test_fail_update_by_action_before_settle_finalized_time() {
             )
         );
 
-        let session_id = MultiApp::calculate_session_id(initiate_request);
+        let session_id = MultiApp::get_session_id(initiate_request.nonce, initiate_request.players.clone());
         let state_proof = get_state_proof(1, 5, 2, session_id, players_pair);
         assert_ok!(
             MultiApp::update_by_state(
@@ -146,7 +146,7 @@ fn test_pass_update_by_action_after_settle_finalized_time() {
             )
         );
 
-        let session_id = MultiApp::calculate_session_id(initiate_request);
+        let session_id = MultiApp::get_session_id(initiate_request.nonce, initiate_request.players.clone());
         let state_proof = get_state_proof(1, 3, 2, session_id, players_pair);
         assert_ok!(
             MultiApp::update_by_state(
@@ -189,7 +189,7 @@ fn test_fail_update_by_state_with_invalid_sequence_number() {
             )
         );
 
-        let session_id = MultiApp::calculate_session_id(initiate_request);
+        let session_id = MultiApp::get_session_id(initiate_request.nonce, initiate_request.players.clone());
         let mut state_proof = get_state_proof(1, 3, 2, session_id, players_pair.clone());
         assert_ok!(
             MultiApp::update_by_state(
@@ -229,7 +229,7 @@ fn test_fail_update_by_state_with_different_player_sigs() {
             )
         );
 
-        let session_id = MultiApp::calculate_session_id(initiate_request);
+        let session_id = MultiApp::get_session_id(initiate_request.nonce, initiate_request.players.clone());
         let state_proof = get_state_proof(1, 3, 2, session_id, vec![players_pair[0].clone(), account_pair("Carl")]);
         assert_noop!(
             MultiApp::update_by_state(
@@ -261,7 +261,7 @@ fn test_pass_update_by_state_with_valid_a_seq_sig() {
             )
         );
 
-        let session_id = MultiApp::calculate_session_id(initiate_request);
+        let session_id = MultiApp::get_session_id(initiate_request.nonce, initiate_request.players.clone());
         let mut state_proof = get_state_proof(1, 5, 2, session_id, players_pair.clone());
     
         assert_ok!(
@@ -287,7 +287,7 @@ fn test_pass_update_by_state_with_valid_a_seq_sig() {
             )
         );
         assert_ok!(
-            MultiApp::get_finalized(
+            MultiApp::is_finalized(
                 Origin::signed(players[0]),
                 session_id
             )
@@ -315,7 +315,7 @@ fn test_fail_update_by_action_after_finalized() {
             )
         );
 
-        let session_id = MultiApp::calculate_session_id(initiate_request);
+        let session_id = MultiApp::get_session_id(initiate_request.nonce, initiate_request.players.clone());
         let state_proof = get_state_proof(1, 2, 2, session_id, players_pair.clone());
     
         assert_ok!(
@@ -356,7 +356,7 @@ fn test_fail_update_by_state_after_finalized() {
             )
         );
 
-        let session_id = MultiApp::calculate_session_id(initiate_request);
+        let session_id = MultiApp::get_session_id(initiate_request.nonce, initiate_request.players.clone());
         let mut state_proof = get_state_proof(1, 2, 2, session_id, players_pair.clone());
         assert_ok!(
             MultiApp::update_by_state(
@@ -397,7 +397,7 @@ fn test_pass_finalize_on_action_timeout() {
             )
         );
 
-        let session_id = MultiApp::calculate_session_id(initiate_request);
+        let session_id = MultiApp::get_session_id(initiate_request.nonce, initiate_request.players.clone());
         let state_proof = get_state_proof(1, 2, 2, session_id, players_pair.clone());
         assert_ok!(
             MultiApp::update_by_state(

@@ -48,7 +48,7 @@ fn test_pass_update_by_state_and_player_2_win() {
             initiate_request.clone())
         );
 
-        let app_id = SingleGomoku::calculate_app_id(initiate_request.clone());
+        let app_id = SingleGomoku::get_app_id(initiate_request.nonce, initiate_request.players.clone());
         let mut board_state = vec![0; 227];
         board_state[0] = 2; // winner
         board_state[1] = 0; // turn
@@ -60,7 +60,7 @@ fn test_pass_update_by_state_and_player_2_win() {
             )
         );
         assert_ok!(
-            SingleGomoku::get_finalized(
+            SingleGomoku::is_finalized(
                 Origin::signed(players[0]),
                 app_id
             )
@@ -96,7 +96,7 @@ fn test_pass_state_new_game_and_update_by_state() {
             initiate_request.clone())
         );
 
-        let app_id = SingleGomoku::calculate_app_id(initiate_request.clone());
+        let app_id = SingleGomoku::get_app_id(initiate_request.nonce, initiate_request.players.clone());
         let mut board_state = vec![0; 227];
         board_state[0] = 0;
         board_state[1] = 1;
@@ -149,7 +149,7 @@ fn test_fail_update_by_state_with_invalid_seq_num() {
             initiate_request.clone())
         );
 
-        let app_id = SingleGomoku::calculate_app_id(initiate_request.clone());
+        let app_id = SingleGomoku::get_app_id(initiate_request.nonce, initiate_request.players.clone());
         let board_state = vec![0; 227];
         let state_proof = get_state_proof(0, 0, board_state, 0, app_id, players_pair);
         assert_noop!(
@@ -183,7 +183,7 @@ fn test_pass_update_by_state_with_higher_seq() {
             initiate_request.clone())
         );
 
-        let app_id = SingleGomoku::calculate_app_id(initiate_request.clone());
+        let app_id = SingleGomoku::get_app_id(initiate_request.nonce, initiate_request.players.clone());
         let mut board_state_1 = vec![0; 227];
         board_state_1[0] = 0;
         board_state_1[1] = 1;
@@ -257,7 +257,7 @@ fn test_player2_palces_stone_at_3_12_and_player1_takes_the_turn() {
             initiate_request.clone())
         );
 
-        let app_id = SingleGomoku::calculate_app_id(initiate_request.clone());
+        let app_id = SingleGomoku::get_app_id(initiate_request.nonce, initiate_request.players.clone());
        
         // place stone 
         place_stone(app_id, players.clone(), players_pair);
@@ -297,7 +297,7 @@ fn test_fail_player2_tries_to_place_another_stone() {
             initiate_request.clone())
         );
 
-        let app_id = SingleGomoku::calculate_app_id(initiate_request.clone());
+        let app_id = SingleGomoku::get_app_id(initiate_request.nonce, initiate_request.players.clone());
         
         // place stone
         place_stone(app_id, players.clone(), players_pair);
@@ -344,7 +344,7 @@ fn test_fail_player1_place_a_stone_at_occupied_slot_3_12() {
             initiate_request.clone())
         );
 
-        let app_id = SingleGomoku::calculate_app_id(initiate_request.clone());
+        let app_id = SingleGomoku::get_app_id(initiate_request.nonce, initiate_request.players.clone());
         
         // place stone
         place_stone(app_id, players.clone(), players_pair);
@@ -391,7 +391,7 @@ fn test_player1_places_a_stone_at_0_4_and_wins() {
             initiate_request.clone())
         );
 
-        let app_id = SingleGomoku::calculate_app_id(initiate_request.clone());
+        let app_id = SingleGomoku::get_app_id(initiate_request.nonce, initiate_request.players.clone());
         
         // place stone
         place_stone(app_id, players.clone(), players_pair);
@@ -416,7 +416,7 @@ fn test_player1_places_a_stone_at_0_4_and_wins() {
         let turn = SingleGomoku::get_state(app_id, 0).unwrap();
         assert_eq!(turn, vec![0]);
         assert_ok!(
-            SingleGomoku::get_finalized(
+            SingleGomoku::is_finalized(
                 Origin::signed(players[0]),
                 app_id
             )
@@ -452,7 +452,7 @@ fn test_fail_finalize_on_action_timeout_before_action_deadline() {
             initiate_request.clone())
         );
 
-        let app_id = SingleGomoku::calculate_app_id(initiate_request.clone());
+        let app_id = SingleGomoku::get_app_id(initiate_request.nonce, initiate_request.players.clone());
         
         let mut board_state = vec![0; 227];
         board_state[0] = 0; // winner
@@ -503,7 +503,7 @@ fn test_pass_finalize_on_action_timeout_after_action_deadline() {
             initiate_request.clone())
         );
 
-        let app_id = SingleGomoku::calculate_app_id(initiate_request.clone());
+        let app_id = SingleGomoku::get_app_id(initiate_request.nonce, initiate_request.players.clone());
         
         let mut board_state = vec![0; 227];
         board_state[0] = 0; // winner
@@ -532,7 +532,7 @@ fn test_pass_finalize_on_action_timeout_after_action_deadline() {
             )
         );
         assert_ok!(
-            SingleGomoku::get_finalized(
+            SingleGomoku::is_finalized(
                 Origin::signed(players[0]),
                 app_id
             )

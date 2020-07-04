@@ -107,7 +107,7 @@ decl_module!  {
             origin,
             initiate_request: AppInitiateRequestOf<T>
         ) -> DispatchResult {
-            let app_id = Self::calculate_app_id(initiate_request.clone());
+            let app_id = Self::get_app_id(initiate_request.nonce, initiate_request.players.clone());
             ensure!(
                 AppInfoMap::<T>::contains_key(&app_id) == false,
                 "AppId alreads exists"
@@ -261,7 +261,7 @@ decl_module!  {
 
         /// Check whether app is finalized
         #[weight = 10_000]
-        pub fn get_finalized(
+        pub fn is_finalized(
             origin,
             app_id: T::Hash,
         ) -> DispatchResult {
@@ -303,7 +303,85 @@ decl_error! {
     }
 }
 
-impl<T: Trait> Module<T> {
+impl<T: Trait> Module<T> {   
+    /// get app id
+    fn get_app_id(
+        nonce: u128,
+        players: Vec<T::AccountId>,
+    ) -> T::Hash {
+        let app_account = Self::app_account();
+        let mut encoded = app_account.encode();
+        encoded.extend(nonce.encode());
+        encoded.extend(players[0].encode());
+        encoded.extend(players[1].encode());
+        let app_id = T::Hashing::hash(&encoded);
+        return app_id;
+    }
+
+    /// get app state
+    pub fn get_state(app_id: T::Hash) -> Option<u8> {
+        let app_info = match AppInfoMap::<T>::get(app_id) {
+            Some(app) => app,
+            None => return None,
+        };
+
+        return Some(app_info.state);
+    }
+
+    /// get app status
+    pub fn get_status(app_id: T::Hash) -> Option<AppStatus> {
+        let app_info = match AppInfoMap::<T>::get(app_id) {
+            Some(app) => app,
+            None => return None,
+        };
+
+        return Some(app_info.status);
+    }
+
+    /// get state settle finalized time
+    pub fn get_settle_finalized_time(app_id: T::Hash) -> Option<T::BlockNumber> {
+        let app_info = match AppInfoMap::<T>::get(app_id) {
+            Some(app) => app,
+            None => return None,
+        };
+
+        if app_info.status == AppStatus::Settle {
+            return Some(app_info.deadline);
+        }
+
+        return None;
+    }
+
+    /// get action deadline
+    pub fn get_action_deadline(app_id: T::Hash) -> Option<T::BlockNumber> {
+        let app_info = match AppInfoMap::<T>::get(app_id) {
+            Some(app) => app,
+            None => return None,
+        };
+        if app_info.status == AppStatus::Action {
+            return Some(app_info.deadline);
+        } else if app_info.status == AppStatus::Settle {
+            return Some(app_info.deadline + app_info.timeout);
+        } else {
+            return None;
+        }
+    }
+
+    /// get app sequence number
+    pub fn get_seq_num(app_id: T::Hash) -> Option<u128> {
+        let app_info = match AppInfoMap::<T>::get(app_id) {
+            Some(app) => app,
+            None => return None,
+        };     
+        return Some(app_info.seq_num);
+    }
+
+    /// get app account id
+    pub fn app_account() -> T::AccountId {
+        SINGLE_SESSION_APP_ID.into_account()
+    }
+
+    /// Submit and settle offchain state
     fn intend_settle(
         state_proof: StateProofOf<T>
     ) -> Result<AppInfoOf<T>, DispatchError> {
@@ -383,84 +461,6 @@ impl<T: Trait> Module<T> {
         }
 
         Ok(new_app_info)
-    }
-    
-    /// get app id
-    fn calculate_app_id(
-        initiate_request: AppInitiateRequestOf<T>
-    ) -> T::Hash {
-        let app_account = Self::app_account();
-        let mut encoded = app_account.encode();
-        encoded.extend(initiate_request.nonce.encode());
-        encoded.extend(initiate_request.players[0].encode());
-        encoded.extend(initiate_request.players[1].encode());
-        encoded.extend(initiate_request.timeout.encode());
-        let app_id = T::Hashing::hash(&encoded);
-        return app_id;
-    }
-
-    /// get app state
-    pub fn get_state(app_id: T::Hash) -> Option<u8> {
-        let app_info = match AppInfoMap::<T>::get(app_id) {
-            Some(app) => app,
-            None => return None,
-        };
-
-        return Some(app_info.state);
-    }
-
-    /// get app status
-    pub fn get_status(app_id: T::Hash) -> Option<AppStatus> {
-        let app_info = match AppInfoMap::<T>::get(app_id) {
-            Some(app) => app,
-            None => return None,
-        };
-
-        return Some(app_info.status);
-    }
-
-    /// get state settle finalized time
-    pub fn get_settle_finalized_time(app_id: T::Hash) -> Option<T::BlockNumber> {
-        let app_info = match AppInfoMap::<T>::get(app_id) {
-            Some(app) => app,
-            None => return None,
-        };
-
-        if app_info.status == AppStatus::Settle {
-            return Some(app_info.deadline);
-        }
-
-        return None;
-    }
-
-    /// get action deadline
-    pub fn get_action_deadline(app_id: T::Hash) -> Option<T::BlockNumber> {
-        let app_info = match AppInfoMap::<T>::get(app_id) {
-            Some(app) => app,
-            None => return None,
-        };
-        if app_info.status == AppStatus::Action {
-            return Some(app_info.deadline);
-        } else if app_info.status == AppStatus::Settle {
-            return Some(app_info.deadline + app_info.timeout);
-        } else {
-            return None;
-        }
-    }
-
-    /// get app sequence number
-    pub fn get_seq_num(app_id: T::Hash) -> Option<u128> {
-        let app_info = match AppInfoMap::<T>::get(app_id) {
-            Some(app) => app,
-            None => return None,
-        };     
-        return Some(app_info.seq_num);
-    }
-
-
-    /// get app account id
-    pub fn app_account() -> T::AccountId {
-        SINGLE_SESSION_APP_ID.into_account()
     }
 
     fn valid_signers(
