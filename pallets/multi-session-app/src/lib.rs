@@ -239,6 +239,28 @@ decl_module!  {
             Ok(())
         }
 
+        /// Check whether session is finalized
+        #[weight = 10_000]
+        pub fn is_finalized(
+            origin,
+            session_id: T::Hash,
+        ) -> DispatchResult {
+            ensure_signed(origin)?;
+            let session_info = match SessionInfoMap::<T>::get(session_id) {
+                Some(session) => session,
+                None => return Err(Error::<T>::SessionInfoNotExist)?,
+            };
+
+            // If session is not finlized, return DispatchError::Other("NotFinalized")
+            ensure!(
+                session_info.status == SessionStatus::Finalized,
+                "NotFinalized"
+            );
+
+            // If session is finalized, return Ok(())
+            Ok(())
+        }
+
         /// Get the session outcome
         #[weight = 10_000]
         pub fn get_outcome(
@@ -252,35 +274,13 @@ decl_module!  {
                 None => Err(Error::<T>::SessionInfoNotExist)?,
             };
 
-            // If outcome is false, return Error::<T>::OutcomeFalse
+            // If outcome is false, return DispatchError::Other("FalseOutcome")
             ensure!(
                 session_info.state == query,
-                Error::<T>::OutcomeFalse
+                "FalseOutcome"
             );
 
             // If outcome is true, return Ok(())
-            Ok(())
-        }
-
-        /// Check whether session is finalized
-        #[weight = 10_000]
-        pub fn is_finalized(
-            origin,
-            session_id: T::Hash,
-        ) -> DispatchResult {
-            ensure_signed(origin)?;
-            let session_info = match SessionInfoMap::<T>::get(session_id) {
-                Some(session) => session,
-                None => return Err(Error::<T>::SessionInfoNotExist)?,
-            };
-
-            // If session is not finlized, return Error::<T>::NotFinalized
-            ensure!(
-                session_info.status == SessionStatus::Finalized,
-                Error::<T>::NotFinalized
-            );
-
-            // If session is finalized, return Ok(())
             Ok(())
         }
     }
@@ -299,10 +299,6 @@ decl_error! {
     pub enum Error for Module<T: Trait> {
         // SessionInfo is not exist
         SessionInfoNotExist,
-        // App outcome is false
-        OutcomeFalse,
-        // App status is not Finalized
-        NotFinalized,
     }
 }
 

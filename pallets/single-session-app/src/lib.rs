@@ -236,6 +236,28 @@ decl_module!  {
             Ok(())
         }
 
+        /// Check whether app is finalized
+        #[weight = 10_000]
+        pub fn is_finalized(
+            origin,
+            app_id: T::Hash,
+        ) -> DispatchResult {
+            ensure_signed(origin)?;
+            let app_info = match AppInfoMap::<T>::get(app_id) {
+                Some(app) => app,
+                None => return Err(Error::<T>::AppInfoNotExist)?,
+            };
+
+            // If app is not finlized, return DispatchError::Other("NotFianlized")
+            ensure!(
+                app_info.status == AppStatus::Finalized,
+                "NotFinalized"
+            );
+
+            // If app is finalized, return Ok(())
+            Ok(())
+        }
+
         /// Get the app outcome
         #[weight = 10_000]
         pub fn get_outcome(
@@ -249,35 +271,13 @@ decl_module!  {
                 None => Err(Error::<T>::AppInfoNotExist)?,
             };
 
-            // If outcome is false, return Error::<T>::OutcomeFalse
+            // If outcome is false, return DispatchError::Other("FalseOutcome")
             ensure!(
                 app_info.state == query,
-                Error::<T>::OutcomeFalse
+                "FalseOutcome"
             );
 
             // If outcome is true, return Ok(())
-            Ok(())
-        }
-
-        /// Check whether app is finalized
-        #[weight = 10_000]
-        pub fn is_finalized(
-            origin,
-            app_id: T::Hash,
-        ) -> DispatchResult {
-            ensure_signed(origin)?;
-            let app_info = match AppInfoMap::<T>::get(app_id) {
-                Some(app) => app,
-                None => return Err(Error::<T>::AppInfoNotExist)?,
-            };
-
-            // If app is not finlized, return Error::<T>::NotFianlized
-            ensure!(
-                app_info.status == AppStatus::Finalized,
-                Error::<T>::NotFinalized
-            );
-
-            // If app is finalized, return Ok(())
             Ok(())
         }
     }
@@ -296,10 +296,6 @@ decl_error! {
     pub enum Error for Module<T: Trait> {
         // AppInfo is not exist
         AppInfoNotExist,
-        // App outcome is false
-        OutcomeFalse,
-        // App status is not Finalized
-        NotFinalized,
     }
 }
 

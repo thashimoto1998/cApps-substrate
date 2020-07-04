@@ -420,10 +420,10 @@ decl_module! {
                 None => Err(Error::<T>::MultiGomokuInfoNotExist)?,
             };
 
-            // If app is not finalized, return Error::<T>::NotFinalized
+            // If app is not finalized, return DispatchError::Other("NotFinalized")
             ensure!(
                 gomoku_info.status == AppStatus::Finalized,
-                Error::<T>::NotFinalized
+                "NotFinalized"
             );
 
             // If app is finalized, return Ok(())
@@ -447,10 +447,10 @@ decl_module! {
                 None => Err(Error::<T>::EmptyBoardState)?,
             };
 
-            // If outcome is false, return Error::<T>::OutcomeFalse
+            // If outcome is false, return DispatchError::Other("FalseOutcome")
             ensure!(
                 board_state[0] == query,
-                Error::<T>::OutcomeFalse
+                "FalseOutcome"
             );
 
             // If outcome is ture, return Ok(())
@@ -476,10 +476,6 @@ decl_error! {
         EmptyBoardState,
         // BlackId is invalid
         InvalidBlackId,
-        // App outcome is false
-        OutcomeFalse,
-        // App status is not finalized
-        NotFinalized,
     }
 }
 

@@ -81,7 +81,7 @@ fn test_pass_update_by_state_state_is_5() {
                 Origin::signed(players[0]),
                 session_id,
             ),
-            Error::<TestRuntime>::NotFinalized
+            "NotFinalized"
         );
     })
 }

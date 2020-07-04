@@ -109,7 +109,7 @@ fn test_pass_update_by_state_state_is_5() {
                 Origin::signed(players_peers[0]),
                 app_id
             ),
-            Error::<TestRuntime>::NotFinalized
+            "NotFinalized"
         );
     })
 }
