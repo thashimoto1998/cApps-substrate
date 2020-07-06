@@ -89,7 +89,7 @@ pub trait Trait: system::Trait {
 }
 
 decl_storage! {
-    trait Store for Module<T: Trait> as SingleSessionApp {
+    trait Store for Module<T: Trait> as MultiSessionApp {
         pub SessionInfoMap get(fn session_info):
             map hasher(blake2_128_concat) T::Hash => Option<SessionInfoOf<T>>;
     }
