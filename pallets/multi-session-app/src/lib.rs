@@ -1,8 +1,10 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 mod mock;
-#[cfg(test)]
-mod tests;
+//#[cfg(test)]
+//mod tests;
+
+mod benchmarking;
 
 use codec::{Decode, Encode};
 use frame_support::{

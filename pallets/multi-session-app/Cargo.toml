@@ -52,6 +52,12 @@ package = 'pallet-balances'
 tag = 'v2.0.0-rc3'
 version = '2.0.0-rc3'
 
+[dependencies.frame-benchmarking]
+default_features = false
+optional = true
+path = "../benchmarking"
+version = "2.0.0-rc-3"
+
 [package]
 authors = ['Celer']
 description = 'Multi Session App'
@@ -71,4 +77,10 @@ std = [
     'sp-runtime/std',
     'sp-std/std',
     'pallet-balances/std',
+]
+
+runtime-benchmarks = [
+    "sp-runtime/runtime-benchmarks",
+    "frame-benchmarking",
+    "frame-system/runtime-benchmarks",
 ]

@@ -2,8 +2,10 @@
 
 mod mock;
 
-#[cfg(test)]
-mod tests;
+//#[cfg(test)]
+//mod tests;
+
+mod benchmarking;
 
 use codec::{Decode, Encode};
 use frame_support::{
@@ -45,15 +47,13 @@ pub type AppStateOf<T> = AppState<
 >;
 
 #[derive(Clone, Eq, PartialEq, PartialOrd, Ord, Encode, Decode, RuntimeDebug)]
-pub struct StateProof<BlockNumber, Hash, Signature> {
-    app_state: AppState<BlockNumber, Hash>,
-    sigs: Vec<Signature>,
+pub struct StateProof<BlockNumber, Hash> {
+    app_state: AppState<BlockNumber, Hash>
 }
 
 pub type StateProofOf<T> = StateProof<
     <T as system::Trait>::BlockNumber,
     <T as system::Trait>::Hash,
-    <T as Trait>::Signature,
 >;
 
 #[derive(Clone, Eq, PartialEq, PartialOrd, Ord, Encode, Decode, RuntimeDebug)]
@@ -386,8 +386,8 @@ impl<T: Trait> Module<T> {
             Some(app) => app,
             None => Err(Error::<T>::AppInfoNotExist)?,
         };
-        let encoded = Self::encode_app_state(app_state.clone());
-        Self::valid_signers(state_proof.sigs, &encoded, app_info.players.clone())?;
+       // let encoded = Self::encode_app_state(app_state.clone());
+      //  Self::valid_signers(state_proof.sigs, &encoded, app_info.players.clone())?;
         ensure!(
             app_info.status != AppStatus::Finalized,
             "app state is finalized"
