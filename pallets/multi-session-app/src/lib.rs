@@ -8,12 +8,14 @@ use codec::{Decode, Encode};
 use frame_support::{
     decl_module, decl_storage, decl_event, decl_error, ensure,
     storage::StorageMap,
+    weights::{DispatchClass, GetDispatchInfo, Weight},
+    traits::Get,
 };
 use frame_system::{self as system, ensure_signed};
 use sp_runtime::{DispatchResult, DispatchError};
 use sp_runtime::traits::{
     Hash, IdentifyAccount, AccountIdConversion, 
-    Member, Verify, Zero, 
+    Member, Verify, Zero,
 };
 use sp_runtime::{ModuleId, RuntimeDebug};
 use sp_std::{prelude::*, vec::Vec};
@@ -102,7 +104,17 @@ decl_module!  {
         fn deposit_event() = default;
 
         /// Initiate multi session app
-        #[weight = 10_000]
+        ///
+        /// Parameters:
+        /// - `initiate_request`: Session initiate request message
+        ///
+        /// # <weight>
+        /// ## Weight
+        /// - Complexity: `O(1)`
+        ///   - 1 storage insertion `SessionInfoMap`
+        ///   - 1 storage reads `SessionInfoMap`
+        /// # </weight>
+        #[weight = 10_000 + T::DbWeight::get().reads_writes(1, 1)]
         fn session_initiate(
             origin,
             initiate_request: SessionInitiateRequestOf<T>
@@ -131,7 +143,20 @@ decl_module!  {
         }
 
         /// Update state according to an off-chain state proof
-        #[weight = 10_000]
+        ///
+        /// Parameters:
+        /// - `state_proof`: Signed off-chain session state
+        ///
+        /// # <weight>
+        /// ## Weight
+        /// - Complexity `O(1)`
+        /// # <weight>
+        /// ## Weight
+        /// - Complexity: `O(1)`
+        ///   - 1 storage mutation `SessionInfoMap`
+        ///   - 1 storage read `SessionInfoMap`
+        /// # </weight>
+        #[weight = 10_000 + T::DbWeight::get().reads_writes(1, 1)]
         fn update_by_state(
             origin,
             state_proof: StateProofOf<T>
@@ -173,7 +198,18 @@ decl_module!  {
         
 
         /// Update state according to an on-chain action
-        #[weight = 10_000]
+        ///
+        /// Parameters:
+        /// - `session_id`: Id of session
+        /// - `action`: Action data
+        ///
+        /// # <weight>
+        /// ## Weight
+        /// - Complexity: `O(1)`
+        ///   - 1 storage mutation `SessionInfoMap`
+        ///   - 1 storage read `SessionInfoMap`
+        /// # </weight>
+        #[weight = 10_000 + T::DbWeight::get().reads_writes(1, 1)]
         fn update_by_action(
             origin,
             session_id: T::Hash,
@@ -199,7 +235,17 @@ decl_module!  {
         }
 
         /// Finalize in case of on-chain action timeout
-        #[weight = 10_000]
+        ///
+        /// Parameters:
+        /// - `session_id`: Id of session
+        ///
+        /// # <weight>
+        /// ## Weight
+        /// - Complexity: `O(1)`
+        ///   - 1 storage mutation `SessionInfoMap`
+        ///   - 1 storage read `SessionInfoMapp`
+        /// # </weight>
+        #[weight = 10_000 + T::DbWeight::get().reads_writes(1, 1)]
         fn finalize_on_action_timeout(
             origin,
             session_id: T::Hash
@@ -240,7 +286,16 @@ decl_module!  {
         }
 
         /// Check whether session is finalized
-        #[weight = 10_000]
+        ///
+        /// Parameters:
+        /// - `session_id`: Id of session
+        ///
+        /// # <weight>
+        /// ## Weight
+        /// - Complexity: `O(1)`
+        ///   - 1 storage read `SessionInfoMap`
+        /// # </weight>
+        #[weight = 10_000 + T::DbWeight::get().reads(1)]
         pub fn is_finalized(
             origin,
             session_id: T::Hash,
@@ -262,7 +317,17 @@ decl_module!  {
         }
 
         /// Get the session outcome
-        #[weight = 10_000]
+        /// 
+        /// Parameters:
+        /// - `session_id`: Id of session
+        /// - `query`: query param
+        ///
+        /// # <weight>
+        /// ## Weight
+        /// - Complexity: `O(1)`
+        ///   - 1 storage read `SessionInfoMap`
+        /// # </weight>
+        #[weight = 10_000 + T::DbWeight::get().reads(1)]
         pub fn get_outcome(
             origin,
             session_id: T::Hash,

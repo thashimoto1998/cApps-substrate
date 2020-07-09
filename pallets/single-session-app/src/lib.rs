@@ -9,6 +9,8 @@ use codec::{Decode, Encode};
 use frame_support::{
     decl_module, decl_storage, decl_event, decl_error, ensure,
     storage::StorageMap,
+    weights::{DispatchClass, GetDispatchInfo, Weight},
+    traits::Get,
 };
 use frame_system::{self as system, ensure_signed};
 use sp_runtime::traits::{
@@ -102,7 +104,17 @@ decl_module!  {
         fn deposit_event() = default;
 
         /// Initiate single session app
-        #[weight = 10_000]
+        ///
+        /// Parameters:
+        /// - `initiate_request`: App initiate request message
+        ///
+        /// # <weight>
+        /// ## Weight
+        /// - Complexity: `O(1)`
+        ///   - 1 storage insertion `AppInfoMap`
+        ///   - 1 storage reads `AppInfoMap`
+        /// # </weight>
+        #[weight = 10_000 + T::DbWeight::get().reads_writes(1, 1)]
         fn app_initiate(
             origin,
             initiate_request: AppInitiateRequestOf<T>
@@ -128,7 +140,20 @@ decl_module!  {
         }
 
         /// Update state according to an off-chain state proof
-        #[weight = 10_000]
+        ///
+        /// Parameters:
+        /// - `state_proof`: Signed off-chain session state
+        ///
+        /// # <weight>
+        /// ## Weight
+        /// - Complexity `O(1)`
+        /// # <weight>
+        /// ## Weight
+        /// - Complexity: `O(1)`
+        ///   - 1 storage mutation `AppInfoMap`
+        ///   - 1 storage read `AppInfoMap`
+        /// # </weight>
+        #[weight = 10_000 + T::DbWeight::get().reads_writes(1, 1)]
         fn update_by_state(
             origin,
             state_proof: StateProofOf<T>
@@ -170,7 +195,18 @@ decl_module!  {
         
 
         /// Update state according to an on-chain action
-        #[weight = 10_000]
+        ///
+        /// Parameters:
+        /// - `app_id`: Id of app
+        /// - `action`: Action data
+        ///
+        /// # <weight>
+        /// ## Weight
+        /// - Complexity: `O(1)`
+        ///   - 1 storage mutation `AppInfoMap`
+        ///   - 1 storage read `AppInfoMap`
+        /// # </weight>
+        #[weight = 10_000 + T::DbWeight::get().reads_writes(1, 1)]
         fn update_by_action(
             origin,
             app_id: T::Hash,
@@ -196,7 +232,17 @@ decl_module!  {
         }
 
         /// Finalize in case of on-chain action timeout
-        #[weight = 10_000]
+        ///
+        /// Parameters:
+        /// - `app_id`: Id of app
+        ///
+        /// # <weight>
+        /// ## Weight
+        /// - Complexity: `O(1)`
+        ///   - 1 storage mutation `AppInfoMap`
+        ///   - 1 storage read `AppInfoMapp`
+        /// # </weight>
+        #[weight = 10_000 + T::DbWeight::get().reads_writes(1, 1)]
         fn finalize_on_action_timeout(
             origin,
             app_id: T::Hash
@@ -237,7 +283,16 @@ decl_module!  {
         }
 
         /// Check whether app is finalized
-        #[weight = 10_000]
+        ///
+        /// Parameters:
+        /// - `app_id`: Id of app
+        ///
+        /// # <weight>
+        /// ## Weight
+        /// - Complexity: `O(1)`
+        ///   - 1 storage read `AppInfoMap`
+        /// # </weight>
+        #[weight = 10_000 + T::DbWeight::get().reads(1)]
         pub fn is_finalized(
             origin,
             app_id: T::Hash,
@@ -259,7 +314,17 @@ decl_module!  {
         }
 
         /// Get the app outcome
-        #[weight = 10_000]
+        /// 
+        /// Parameters:
+        /// - `app_id`: Id of app
+        /// - `query`: query param
+        ///
+        /// # <weight>
+        /// ## Weight
+        /// - Complexity: `O(1)`
+        ///   - 1 storage read `AppInfoMap`
+        /// # </weight>
+        #[weight = 10_000 + T::DbWeight::get().reads(1)]
         pub fn get_outcome(
             origin,
             app_id: T::Hash,
