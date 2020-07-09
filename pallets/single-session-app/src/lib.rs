@@ -9,7 +9,6 @@ use codec::{Decode, Encode};
 use frame_support::{
     decl_module, decl_storage, decl_event, decl_error, ensure,
     storage::StorageMap,
-    weights::{DispatchClass, GetDispatchInfo, Weight},
     traits::Get,
 };
 use frame_system::{self as system, ensure_signed};
@@ -113,8 +112,10 @@ decl_module!  {
         /// - Complexity: `O(1)`
         ///   - 1 storage insertion `AppInfoMap`
         ///   - 1 storage reads `AppInfoMap`
+        /// - Based on benchmark;
+        ///     18.44　µs
         /// # </weight>
-        #[weight = 10_000 + T::DbWeight::get().reads_writes(1, 1)]
+        #[weight = 19_000_000 + T::DbWeight::get().reads_writes(1, 1)]
         fn app_initiate(
             origin,
             initiate_request: AppInitiateRequestOf<T>
@@ -142,7 +143,7 @@ decl_module!  {
         /// Update state according to an off-chain state proof
         ///
         /// Parameters:
-        /// - `state_proof`: Signed off-chain session state
+        /// - `state_proof`: Signed off-chain app state
         ///
         /// # <weight>
         /// ## Weight
@@ -152,8 +153,10 @@ decl_module!  {
         /// - Complexity: `O(1)`
         ///   - 1 storage mutation `AppInfoMap`
         ///   - 1 storage read `AppInfoMap`
+        /// - Based on benchmark;
+        ///     44.68　µs
         /// # </weight>
-        #[weight = 10_000 + T::DbWeight::get().reads_writes(1, 1)]
+        #[weight = 45_000_000 + T::DbWeight::get().reads_writes(1, 1)]
         fn update_by_state(
             origin,
             state_proof: StateProofOf<T>
@@ -205,8 +208,10 @@ decl_module!  {
         /// - Complexity: `O(1)`
         ///   - 1 storage mutation `AppInfoMap`
         ///   - 1 storage read `AppInfoMap`
+        /// - Based on benchmark;
+        ///     23.92　µs
         /// # </weight>
-        #[weight = 10_000 + T::DbWeight::get().reads_writes(1, 1)]
+        #[weight = 24_000_000 + T::DbWeight::get().reads_writes(1, 1)]
         fn update_by_action(
             origin,
             app_id: T::Hash,
@@ -241,8 +246,10 @@ decl_module!  {
         /// - Complexity: `O(1)`
         ///   - 1 storage mutation `AppInfoMap`
         ///   - 1 storage read `AppInfoMapp`
+        /// - Based on benchmark;
+        ///    21.59 　µs
         /// # </weight>
-        #[weight = 10_000 + T::DbWeight::get().reads_writes(1, 1)]
+        #[weight = 22_000_000 + T::DbWeight::get().reads_writes(1, 1)]
         fn finalize_on_action_timeout(
             origin,
             app_id: T::Hash
@@ -291,8 +298,10 @@ decl_module!  {
         /// ## Weight
         /// - Complexity: `O(1)`
         ///   - 1 storage read `AppInfoMap`
+        /// - Based on benchmark;
+        ///     10.27　µs
         /// # </weight>
-        #[weight = 10_000 + T::DbWeight::get().reads(1)]
+        #[weight = 11_000_000 + T::DbWeight::get().reads(1)]
         pub fn is_finalized(
             origin,
             app_id: T::Hash,
@@ -323,8 +332,10 @@ decl_module!  {
         /// ## Weight
         /// - Complexity: `O(1)`
         ///   - 1 storage read `AppInfoMap`
+        /// - Based on benchmark;
+        ///     10.83　µs
         /// # </weight>
-        #[weight = 10_000 + T::DbWeight::get().reads(1)]
+        #[weight = 11_000_000 + T::DbWeight::get().reads(1)]
         pub fn get_outcome(
             origin,
             app_id: T::Hash,
@@ -365,7 +376,11 @@ decl_error! {
 }
 
 impl<T: Trait> Module<T> {   
-    /// get app id
+    /// Get Id of app
+    ///
+    /// Parameters:
+    /// `nonce`: Nonce of app
+    /// `players`: AccountId of players
     fn get_app_id(
         nonce: u128,
         players: Vec<T::AccountId>,
@@ -379,7 +394,10 @@ impl<T: Trait> Module<T> {
         return app_id;
     }
 
-    /// get app state
+    /// Get app state
+    ///
+    /// Parameter:
+    /// `app_id`: Id of app
     pub fn get_state(app_id: T::Hash) -> Option<u8> {
         let app_info = match AppInfoMap::<T>::get(app_id) {
             Some(app) => app,
@@ -389,7 +407,10 @@ impl<T: Trait> Module<T> {
         return Some(app_info.state);
     }
 
-    /// get app status
+    /// Get app status
+    ///
+    /// Parameter:
+    /// `app_id`: Id of app
     pub fn get_status(app_id: T::Hash) -> Option<AppStatus> {
         let app_info = match AppInfoMap::<T>::get(app_id) {
             Some(app) => app,
@@ -399,7 +420,10 @@ impl<T: Trait> Module<T> {
         return Some(app_info.status);
     }
 
-    /// get state settle finalized time
+    /// Get state settle finalized time
+    ///
+    /// Parameter:
+    /// `app_id`: Id of app
     pub fn get_settle_finalized_time(app_id: T::Hash) -> Option<T::BlockNumber> {
         let app_info = match AppInfoMap::<T>::get(app_id) {
             Some(app) => app,
@@ -413,7 +437,10 @@ impl<T: Trait> Module<T> {
         return None;
     }
 
-    /// get action deadline
+    /// Get action deadline
+    ///
+    /// Parameter:
+    /// `app_id`: Id of app
     pub fn get_action_deadline(app_id: T::Hash) -> Option<T::BlockNumber> {
         let app_info = match AppInfoMap::<T>::get(app_id) {
             Some(app) => app,
@@ -428,7 +455,10 @@ impl<T: Trait> Module<T> {
         }
     }
 
-    /// get app sequence number
+    /// Get app sequence number
+    ///
+    /// Parameter:
+    /// `app_id`: Id of app
     pub fn get_seq_num(app_id: T::Hash) -> Option<u128> {
         let app_info = match AppInfoMap::<T>::get(app_id) {
             Some(app) => app,
@@ -437,12 +467,15 @@ impl<T: Trait> Module<T> {
         return Some(app_info.seq_num);
     }
 
-    /// get app account id
+    /// Get single session app account id
     pub fn app_account() -> T::AccountId {
         SINGLE_SESSION_APP_ID.into_account()
     }
 
     /// Submit and settle offchain state
+    ///
+    /// Parameter:
+    /// `state_proof`: Signed off-chain app state
     fn intend_settle(
         state_proof: StateProofOf<T>
     ) -> Result<AppInfoOf<T>, DispatchError> {
@@ -481,6 +514,9 @@ impl<T: Trait> Module<T> {
     }
 
     /// Apply an action to the on-chain state
+    ///
+    /// Parameter:
+    /// `app_id`: Id of app
     fn apply_action(
         app_id: T::Hash,
     ) -> Result<AppInfoOf<T>, DispatchError> {
@@ -524,6 +560,12 @@ impl<T: Trait> Module<T> {
         Ok(new_app_info)
     }
 
+    /// Verify off-chain state signatures
+    ///
+    /// Parameters:
+    /// `signatures`: Signaturs from the players
+    /// `encoded`: Encoded app state
+    /// `signers`: AccountId of player
     fn valid_signers(
         signatures: Vec<<T as Trait>::Signature>,
         encoded: &[u8],
@@ -541,6 +583,10 @@ impl<T: Trait> Module<T> {
         Ok(())
     }
 
+    /// Encode app state
+    ///
+    /// Parameter:
+    /// `app_state`: app state
     fn encode_app_state(
         app_state: AppStateOf<T>
     ) -> Vec<u8> {
