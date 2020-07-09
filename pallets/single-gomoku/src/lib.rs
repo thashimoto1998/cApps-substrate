@@ -9,6 +9,7 @@ use codec::{Decode, Encode};
 use frame_support::{
     decl_module, decl_storage, decl_event, decl_error, ensure,
     storage::StorageMap,
+    traits::Get,
 };
 use frame_system::{self as system, ensure_signed};
 use sp_runtime::traits::{
@@ -121,7 +122,19 @@ decl_module! {
         fn deposit_event() = default;
 
         /// Initiate single gomoku app
-        #[weight = 10_000]
+        ///
+        /// Parameters:
+        /// - `initiate_request`: App initiate request message
+        ///
+        /// # <weight>
+        /// ## Weight
+        /// - Complexity: `O(1)`
+        ///   - 1 storage insertion `GomokuInfoMap`
+        ///   - 1 storage reads `GomokuxInfoMap`
+        /// - Based on benchmark;
+        ///     17.89　µs
+        /// # </weight>
+        #[weight = 18_000_000 + T::DbWeight::get().reads_writes(1, 1)]
         fn app_initiate(
             origin,
             initiate_request: AppInitiateRequestOf<T>
@@ -161,7 +174,22 @@ decl_module! {
         }
 
         /// Update state according to an off-chain state proof 
-        #[weight = 10_000]
+        ///
+        /// Parameters:
+        /// - `state_proof`: Signed off-chain session state
+        ///
+        /// # <weight>
+        /// ## Weight
+        /// - Complexity `O(1)`
+        /// # <weight>
+        /// ## Weight
+        /// - Complexity: `O(1)`
+        ///   - 1 storage mutation `GomokuInfoMap`
+        ///   - 1 storage read `GomokuInfoMap`
+        /// - Based on benchmark;
+        ///     50.27　µs
+        /// # </weight>
+        #[weight = 51_000_000 + T::DbWeight::get().reads_writes(1, 1)]
         fn update_by_state(
             origin,
             state_proof: StateProofOf<T>
@@ -221,7 +249,20 @@ decl_module! {
         }
 
         /// Update state according to an on-chain action
-        #[weight = 10_000]
+        ///
+        /// Parameters:
+        /// - `app_id`: Id of app
+        /// - `action`: Action data
+        ///
+        /// # <weight>
+        /// ## Weight
+        /// - Complexity: `O(1)`
+        ///   - 2 storage mutation `GomokuInfoMap`
+        ///   - 1 storage read `GomokuInfoMap`
+        /// - Based on benchmark;
+        ///     47.23　µs
+        /// # </weight>
+        #[weight = 48_000_000 + T::DbWeight::get().reads_writes(1, 2)]
         fn update_by_action(
             origin,
             app_id: T::Hash,
@@ -341,7 +382,19 @@ decl_module! {
         }
 
         /// Finalized based on current state in case of on-chain action timeout
-        #[weight = 10_000]
+        ///
+        /// Parameters:
+        /// - `app_id`: Id of app
+        ///
+        /// # <weight>
+        /// ## Weight
+        /// - Complexity: `O(1)`
+        ///   - 1 storage mutation `GomokuInfoMap`
+        ///   - 1 storage read `GomokuInfoMapp`
+        /// - Based on benchmark;
+        ///     30.51　µs
+        /// # </weight>
+        #[weight = 31_000_000 + T::DbWeight::get().reads_writes(1, 1)]
         fn finalize_on_action_timeout(
             origin,
             app_id: T::Hash
@@ -384,7 +437,18 @@ decl_module! {
         }
 
         /// Check whether app is finalized
-        #[weight = 10_000]
+        ///
+        /// Parameters:
+        /// - `app_id`: Id of app
+        ///
+        /// # <weight>
+        /// ## Weight
+        /// - Complexity: `O(1)`
+        ///   - 1 storage read `GomokuInfoMap`
+        /// - Based on benchmark;
+        ///     13.7　µs
+        /// # </weight>
+        #[weight = 14_000_000 + T::DbWeight::get().reads(1)]
         pub fn is_finalized(
             origin,
             app_id: T::Hash
@@ -406,7 +470,19 @@ decl_module! {
         }
 
         /// Get the app outcome
-        #[weight = 10_000]
+        /// 
+        /// Parameters:
+        /// - `app_id`: Id of app
+        /// - `query`: query param
+        ///
+        /// # <weight>
+        /// ## Weight
+        /// - Complexity: `O(1)`
+        ///   - 1 storage read `GomokuInfoMap`
+        /// - Based on benchmark;
+        ///     12.06　µs
+        /// # </weight>
+        #[weight = 12_000_000 + T::DbWeight::get().reads(1)]
         pub fn get_outcome(
             origin,
             app_id: T::Hash,
@@ -453,7 +529,11 @@ decl_error! {
 }
 
 impl<T: Trait> Module<T> {
-    /// get app id
+    /// Get Id of app
+    ///
+    /// Parameters:
+    /// `nonce`: Nonce of app
+    /// `players`: AccountId of players
     pub fn get_app_id(
         nonce: u128,
         players: Vec<T::AccountId>,
@@ -467,7 +547,11 @@ impl<T: Trait> Module<T> {
         return app_id;
     }
 
-    /// get app state
+    /// Get app state
+    ///
+    /// Parameters:
+    /// `app_id`: Id of app
+    /// `key`: Query key 0:Turn, 1:Winner, 2:FullState
     pub fn get_state(app_id: T::Hash, key: u8) -> Option<Vec<u8>> {
         let gomoku_info = match SingleGomokuInfoMap::<T>::get(app_id) {
             Some(info) => info,
@@ -478,12 +562,17 @@ impl<T: Trait> Module<T> {
             return Some(vec![board_state[0]]);
         } else if key == StateKey::Turn as u8 {
             return Some(vec![board_state[1]]);
-        } else {
+        } else if key == StateKey::FullState as u8 {
             return Some(board_state);
+        } else {
+            return None;
         }
     }
 
-    /// get app status
+    /// Get app status
+    ///
+    /// Parameter:
+    /// `app_id`: Id of app
     pub fn get_status(app_id: T::Hash) -> Option<AppStatus> {
         let gomoku_info = match SingleGomokuInfoMap::<T>::get(app_id) {
             Some(app) => app,
@@ -493,7 +582,10 @@ impl<T: Trait> Module<T> {
         return Some(gomoku_info.status);
     }
 
-    /// get state settle fianlized time
+    /// Get state settle finalized time
+    ///
+    /// Parameter:
+    /// `app_id`: Id of app
     pub fn get_settle_finalized_time(app_id: T::Hash) -> Option<T::BlockNumber> {
         let gomoku_info = match SingleGomokuInfoMap::<T>::get(app_id) {
             Some(info) => info,
@@ -506,7 +598,10 @@ impl<T: Trait> Module<T> {
         return None;
     }
 
-    /// get action deadline
+    /// Get action deadline
+    ///
+    /// Parameter:
+    /// `app_id`: Id of app
     pub fn get_action_deadline(app_id: T::Hash) -> Option<T::BlockNumber> {
         let gomoku_info = match SingleGomokuInfoMap::<T>::get(app_id) {
             Some(info) => info,
@@ -521,7 +616,10 @@ impl<T: Trait> Module<T> {
         }
     }
 
-    /// get app sequence number
+    /// Get app sequence number
+    ///
+    /// Parameter:
+    /// `app_id`: Id of app
     pub fn get_seq_num(app_id: T::Hash) -> Option<u128> {
         let gomoku_info = match SingleGomokuInfoMap::<T>::get(app_id) {
             Some(info) => info,
@@ -530,12 +628,15 @@ impl<T: Trait> Module<T> {
         return Some(gomoku_info.seq_num);
     }
 
-    /// get single gomoku app account id
+    /// Get single gomoku app account id
     pub fn app_account() -> T::AccountId {
         SINGLE_GOMOKU_ID.into_account()
     }
 
     /// Submit and settle off-chain state
+    ///
+    /// Parameter:
+    /// `state_proof`: Signed off-chain app state
     fn intend_settle(
         state_proof: StateProofOf<T>
     ) -> Result<GomokuInfoOf<T>, DispatchError> {
@@ -574,6 +675,9 @@ impl<T: Trait> Module<T> {
     }
 
     /// Apply an action to the on-chain state
+    ///
+    /// Parameter:
+    /// `app_id`: Id of app
     fn apply_action(
         app_id: T::Hash
     ) -> Result<GomokuInfoOf<T>, DispatchError> {
@@ -617,6 +721,12 @@ impl<T: Trait> Module<T> {
         Ok(new_gomoku_info)        
     }
 
+    /// Verify off-chain state signatures
+    ///
+    /// Parameters:
+    /// `signatures`: Signaturs from the players
+    /// `encoded`: Encoded app state
+    /// `signers`: AccountId of players
     fn valid_signers(
         signatures: Vec<<T as Trait>::Signature>,
         encoded: &[u8],
@@ -635,6 +745,10 @@ impl<T: Trait> Module<T> {
     }
 
     /// Set game states when there is a winner
+    ///
+    /// Parameters:
+    /// `winner`: Id of winner
+    /// `gomoku_info`: Info of gomoku state
     fn win_game(
         winner: u8, 
         gomoku_info: GomokuInfoOf<T>,
@@ -696,6 +810,12 @@ impl<T: Trait> Module<T> {
     }
 
     /// Check if there is five in a row in agiven direction
+    ///
+    /// Parameters:
+    /// `_x`: x coordinate on the board
+    /// `_y`: y coordinate on the board
+    /// `_xdir`: direction (-1 or 0 or 1) in x axis
+    /// `_ydir`: direction (-1 or 0 or 1) in y axis
     fn check_five(
         _board_state: Vec<u8>,
         _x: u8,
@@ -714,6 +834,12 @@ impl<T: Trait> Module<T> {
     }
 
     /// Count the maximum consecutive stones in a given direction
+    ///
+    /// Parameters:
+    /// `_x`: x coordinate on the board
+    /// `_y`: y coordinate on the board
+    /// `_xdir`: direction (-1 or 0 or 1) in x axis
+    /// `_ydir`: direction (-1 or 0 or 1) in y axis
     fn count_stone(
         _board_state: Vec<u8>, 
         _x: u8, 
@@ -737,6 +863,10 @@ impl<T: Trait> Module<T> {
     }
 
     /// Check if coordinate (x, y) is valid
+    ///
+    /// Parameters:
+    /// `_x`: x coordinate on the board
+    /// `_y`: y coordinate on the board
     fn check_boundary(x: u8, y: u8) -> bool {
         // board dimention is 15*15
         let board_dimention = 15;
@@ -748,6 +878,10 @@ impl<T: Trait> Module<T> {
     }
 
     /// Check if coordinate (x, y) is valid
+    ///
+    /// Parameters:
+    /// `_x`: x coordinate on the board
+    /// `_y`: y coordinate on the board
     fn state_index(x: u8, y: u8) -> usize {
         // board dimention is 15*15
         let board_dimention = 15;
@@ -755,6 +889,10 @@ impl<T: Trait> Module<T> {
         return index;
     }
 
+    /// Encode app state
+    ///
+    /// Parameter:
+    /// `app_state`: app state
     fn encode_app_state(
         app_state: AppStateOf<T>
     ) -> Vec<u8> {

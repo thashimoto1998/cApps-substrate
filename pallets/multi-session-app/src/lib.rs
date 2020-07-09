@@ -8,12 +8,13 @@ use codec::{Decode, Encode};
 use frame_support::{
     decl_module, decl_storage, decl_event, decl_error, ensure,
     storage::StorageMap,
+    traits::Get,
 };
 use frame_system::{self as system, ensure_signed};
 use sp_runtime::{DispatchResult, DispatchError};
 use sp_runtime::traits::{
     Hash, IdentifyAccount, AccountIdConversion, 
-    Member, Verify, Zero, 
+    Member, Verify, Zero,
 };
 use sp_runtime::{ModuleId, RuntimeDebug};
 use sp_std::{prelude::*, vec::Vec};
@@ -102,7 +103,19 @@ decl_module!  {
         fn deposit_event() = default;
 
         /// Initiate multi session app
-        #[weight = 10_000]
+        ///
+        /// Parameters:
+        /// - `initiate_request`: Session initiate request message
+        ///
+        /// # <weight>
+        /// ## Weight
+        /// - Complexity: `O(1)`
+        ///   - 1 storage insertion `SessionInfoMap`
+        ///   - 1 storage reads `SessionInfoMap`
+        /// - Based on benchmark;
+        ///     19.78　µs
+        /// # </weight>
+        #[weight = 20_000_000 + T::DbWeight::get().reads_writes(1, 1)]
         fn session_initiate(
             origin,
             initiate_request: SessionInitiateRequestOf<T>
@@ -131,7 +144,22 @@ decl_module!  {
         }
 
         /// Update state according to an off-chain state proof
-        #[weight = 10_000]
+        ///
+        /// Parameters:
+        /// - `state_proof`: Signed off-chain session state
+        ///
+        /// # <weight>
+        /// ## Weight
+        /// - Complexity `O(1)`
+        /// # <weight>
+        /// ## Weight
+        /// - Complexity: `O(1)`
+        ///   - 1 storage mutation `SessionInfoMap`
+        ///   - 1 storage read `SessionInfoMap`
+        /// - Based on benchmark;
+        ///     48.44　µs
+        /// # </weight>
+        #[weight = 49_000_000 + T::DbWeight::get().reads_writes(1, 1)]
         fn update_by_state(
             origin,
             state_proof: StateProofOf<T>
@@ -173,7 +201,20 @@ decl_module!  {
         
 
         /// Update state according to an on-chain action
-        #[weight = 10_000]
+        ///
+        /// Parameters:
+        /// - `session_id`: Id of session
+        /// - `action`: Action data
+        ///
+        /// # <weight>
+        /// ## Weight
+        /// - Complexity: `O(1)`
+        ///   - 1 storage mutation `SessionInfoMap`
+        ///   - 1 storage read `SessionInfoMap`
+        /// - Based on benchmark;
+        ///     24.89　µs
+        /// # </weight>
+        #[weight = 25_000_000 + T::DbWeight::get().reads_writes(1, 1)]
         fn update_by_action(
             origin,
             session_id: T::Hash,
@@ -199,7 +240,19 @@ decl_module!  {
         }
 
         /// Finalize in case of on-chain action timeout
-        #[weight = 10_000]
+        ///
+        /// Parameters:
+        /// - `session_id`: Id of session
+        ///
+        /// # <weight>
+        /// ## Weight
+        /// - Complexity: `O(1)`
+        ///   - 1 storage mutation `SessionInfoMap`
+        ///   - 1 storage read `SessionInfoMap`
+        /// - Based on benchmark;
+        ///     16.35　µs
+        /// # </weight>
+        #[weight = 17_000_000 + T::DbWeight::get().reads_writes(1, 1)]
         fn finalize_on_action_timeout(
             origin,
             session_id: T::Hash
@@ -240,7 +293,18 @@ decl_module!  {
         }
 
         /// Check whether session is finalized
-        #[weight = 10_000]
+        ///
+        /// Parameters:
+        /// - `session_id`: Id of session
+        ///
+        /// # <weight>
+        /// ## Weight
+        /// - Complexity: `O(1)`
+        ///   - 1 storage read `SessionInfoMap`
+        /// - Based on benchmark;
+        ///     9.118　µs
+        /// # </weight>
+        #[weight = 10_000_000 + T::DbWeight::get().reads(1)]
         pub fn is_finalized(
             origin,
             session_id: T::Hash,
@@ -262,7 +326,19 @@ decl_module!  {
         }
 
         /// Get the session outcome
-        #[weight = 10_000]
+        /// 
+        /// Parameters:
+        /// - `session_id`: Id of session
+        /// - `query`: query param
+        ///
+        /// # <weight>
+        /// ## Weight
+        /// - Complexity: `O(1)`
+        ///   - 1 storage read `SessionInfoMap`
+        /// - Based on benchmark;
+        ///     10.27　µs
+        /// # </weight>
+        #[weight = 11_000_000 + T::DbWeight::get().reads(1)]
         pub fn get_outcome(
             origin,
             session_id: T::Hash,
@@ -303,7 +379,11 @@ decl_error! {
 }
 
 impl<T: Trait> Module<T> {
-    /// get session id
+    /// Get Id of session
+    ///
+    /// Parameters:
+    /// `nonce`: Nonce of session
+    /// `players`: AccountId of players
     pub fn get_session_id(
         nonce: u128,
         players: Vec<T::AccountId>,
@@ -317,7 +397,10 @@ impl<T: Trait> Module<T> {
         return session_id;
     }
 
-    /// get session state
+    /// Get session state
+    ///
+    /// Parameter:
+    /// `app_id`: Id of session
     pub fn get_state(session_id: T::Hash) -> Option<u8> {
         let session_info = match SessionInfoMap::<T>::get(session_id) {
             Some(session) => session,
@@ -327,7 +410,10 @@ impl<T: Trait> Module<T> {
         return Some(session_info.state);
     }
 
-    /// get session status
+    /// Get session status
+    ///
+    /// Parameter:
+    /// `session_id`: Id of session
     pub fn get_status(session_id: T::Hash) -> Option<SessionStatus> {
         let session_info = match SessionInfoMap::<T>::get(session_id) {
             Some(session) => session,
@@ -337,7 +423,10 @@ impl<T: Trait> Module<T> {
         return Some(session_info.status);
     }
 
-    /// get state settle finalized time
+    /// Get state settle finalized time
+    ///
+    /// Parameter:
+    /// `app_id`: Id of session
     pub fn get_settle_finalized_time(session_id: T::Hash) -> Option<T::BlockNumber> {
         let session_info = match SessionInfoMap::<T>::get(session_id) {
             Some(session) => session,
@@ -351,7 +440,10 @@ impl<T: Trait> Module<T> {
         return None;
     }
 
-    /// get action deadline
+    /// Get action deadline
+    ///
+    /// Parameter:
+    /// `session_id`: Id of session
     pub fn get_action_deadline(session_id: T::Hash) -> Option<T::BlockNumber> {
         let session_info = match SessionInfoMap::<T>::get(session_id) {
             Some(session) => session,
@@ -366,7 +458,10 @@ impl<T: Trait> Module<T> {
         }
     }
 
-    /// get session sequence number
+    /// Get session sequence number
+    ///
+    /// Parameter:
+    /// `session_id`: Id of session
     pub fn get_seq_num(session_id: T::Hash) -> Option<u128> {
         let session_info = match SessionInfoMap::<T>::get(session_id) {
             Some(session) => session,
@@ -376,11 +471,15 @@ impl<T: Trait> Module<T> {
     }
 
 
-    /// get multi session app account id
+    /// Get multi session app account id
     pub fn app_account() -> T::AccountId {
         MULTI_SESSION_APP_ID.into_account()
     }
 
+    /// Submit and settle offchain state
+    ///
+    /// Parameter:
+    /// `state_proof`: Signed off-chain app state
     fn intend_settle(
         state_proof: StateProofOf<T>
     ) -> Result<SessionInfoOf<T>, DispatchError> {
@@ -420,6 +519,9 @@ impl<T: Trait> Module<T> {
     }
 
     /// Apply an action to the on-chain state
+     ///
+    /// Parameter:
+    /// `session_id`: Id of session
     fn apply_action(
         session_id: T::Hash,
     ) -> Result<SessionInfoOf<T>, DispatchError> {
@@ -463,7 +565,12 @@ impl<T: Trait> Module<T> {
         Ok(new_session_info)
     }
 
-    /// check signature
+    /// Verify off-chain state signatures
+    ///
+    /// Parameters:
+    /// `signatures`: Signaturs from the players
+    /// `encoded`: Encoded app state
+    /// `signers`: AccountId of player
     fn valid_signers(
         signatures: Vec<<T as Trait>::Signature>,
         encoded: &[u8],
@@ -480,7 +587,10 @@ impl<T: Trait> Module<T> {
         Ok(())
     }
 
-    /// check whether account is asscending order
+    /// Check whether account is asscending order
+    ///
+    /// Parameter:
+    /// `palyers`: AccountId of players
     fn is_ordered_account(
         players: Vec<T::AccountId>
     ) -> Result<(), DispatchError> {
@@ -496,6 +606,10 @@ impl<T: Trait> Module<T> {
         Ok(())
     }
 
+    /// Encode app state
+    ///
+    /// Parameter:
+    /// `app_state`: app state
     fn encode_app_state(
         app_state: AppStateOf<T>
     ) -> Vec<u8> {
