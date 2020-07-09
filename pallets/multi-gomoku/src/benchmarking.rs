@@ -1,23 +1,26 @@
-//! Single gomoku benchmarking
+//! Multi gomoku benchmarking
 
 #![cfg(feature = "runtime-benchmarks")]
 use super::*;
 use frame_system::{RawOrigin, Module as System};
 use frame_benchmarking::{benchmarks, account};
-use crate::Module as SingleGomoku;
+use crate::Module as MultiGomoku;
 use sp_std::vec::Vec;
 
 const SEED: u32 = 0;
+const NONE: u8 = 0;
+const BLACK: u8 = 1;
+const WHITE: u8 = 2;
+const BLACK_PLAYER_ID_1: u8 = 2;
+const BLACK_PLAYER_ID_2: u8 = 1;
 
 fn get_state_proof<T: Trait>(
-    nonce: u128, 
-    seq: u128, 
+    seq: u128,
     board_state: Vec<u8>,
-    timeout: T::BlockNumber, 
+    timeout: T::BlockNumber,
     app_id: T::Hash
 ) -> StateProof<T::BlockNumber, T::Hash> {
     let app_state = AppState {
-        nonce: nonce,
         seq_num: seq,
         board_state: board_state,
         timeout: timeout,
@@ -32,35 +35,36 @@ fn get_state_proof<T: Trait>(
 
 fn place_stone<T: Trait>(
     app_id: T::Hash,
-    nonce: u128,
     players: Vec<T::AccountId>,
+    nonce: u128,
 ) {
-    let mut board_state_1 = vec![0; 227];
-    board_state_1[0] = 0;
-    board_state_1[1] = 1;
-    board_state_1[2] = 2;
-    board_state_1[3] = 2;
-    board_state_1[4] = 1;
-    board_state_1[5] = 1;
-    board_state_1[6] = 2;
-    board_state_1[7] = 2;
-    board_state_1[8] = 1;
-    let state_proof_1 = get_state_proof::<T>(nonce, 1, board_state_1.clone(), 0.into(), app_id);
-    SingleGomoku::<T>::update_by_state(RawOrigin::Signed(players[0].clone()).into(), state_proof_1);
+    let mut board_state_1 = vec![0; 228];
+    board_state_1[0] = NONE;
+    board_state_1[1] = BLACK;
+    board_state_1[2] = BLACK_PLAYER_ID_1;
+    board_state_1[3] = WHITE;
+    board_state_1[4] = WHITE;
+    board_state_1[5] = BLACK;
+    board_state_1[6] = BLACK;
+    board_state_1[7] = WHITE;
+    board_state_1[8] = WHITE;
+    board_state_1[9] = BLACK;
+    let state_proof = get_state_proof::<T>(1, board_state_1, 2.into(), app_id);
+    MultiGomoku::<T>::update_by_state(RawOrigin::Signed(players[0].clone()).into(), state_proof);
 
-    let mut board_state_2 = vec![0; 227];
-    board_state_2[0] = 0; // winner
-    board_state_2[1] = 2; // turn
-    board_state_2[2] = 1; // (0, 0)
-    board_state_2[3] = 1; // (0, 1)
-    board_state_2[4] = 1; // (0, 2)
-    board_state_2[5] = 1; // (0, 3)
-    board_state_2[101] = 2; 
-    board_state_2[102] = 2;
-    board_state_2[103] = 2;
-    let state_proof_2 = get_state_proof::<T>(nonce, 2, board_state_2, 0.into(), app_id);
-    SingleGomoku::<T>::update_by_state(RawOrigin::Signed(players[0].clone()).into(), state_proof_2);
-
+    let mut board_state_2 = vec![0; 228];
+    board_state_2[0] = NONE;
+    board_state_2[1] = WHITE;
+    board_state_2[2] = BLACK_PLAYER_ID_1;
+    board_state_2[3] = BLACK;
+    board_state_2[4] = BLACK;
+    board_state_2[5] = BLACK;
+    board_state_2[6] = BLACK;
+    board_state_2[101] = WHITE;
+    board_state_2[102] = WHITE;
+    board_state_2[103] = WHITE;
+    let state_proof = get_state_proof::<T>(2, board_state_2, 2.into(), app_id);
+    MultiGomoku::<T>::update_by_state(RawOrigin::Signed(players[0].clone()).into(), state_proof);
 }
 
 benchmarks! {
@@ -84,11 +88,12 @@ benchmarks! {
         let initiate_request = AppInitiateRequest {
             nonce: i as u128,
             players: players.clone(),
+            player_num: 2,
             timeout: 2.into(),
             min_stone_offchain: 5,
             max_stone_onchain: 5
         };
-    }: _(RawOrigin::Signed(player1.clone()), initiate_request)
+    }: _(RawOrigin::Signed(players[0].clone()), initiate_request)
 
     update_by_state {
         let i in 0 .. 1000;
@@ -108,23 +113,26 @@ benchmarks! {
         let initiate_request = AppInitiateRequest {
             nonce: i as u128,
             players: players.clone(),
+            player_num: 2,
             timeout: 2.into(),
             min_stone_offchain: 5,
             max_stone_onchain: 5
         };
-        SingleGomoku::<T>::app_initiate(RawOrigin::Signed(player1.clone()).into(), initiate_request.clone())?;
-        let app_id = SingleGomoku::<T>::get_app_id(initiate_request.nonce, initiate_request.players.clone());
-        let mut board_state = vec![0; 227];
-        board_state[0] = 0;
-        board_state[1] = 1;
-        board_state[2] = 2;
-        board_state[3] = 2;
-        board_state[4] = 1;
-        board_state[5] = 1;
-        board_state[6] = 2;
-        board_state[7] = 2;
-        board_state[8] = 1;
-        let state_proof = get_state_proof::<T>(i as u128, 1, board_state, 0.into(), app_id);
+        MultiGomoku::<T>::app_initiate(RawOrigin::Signed(players[0].clone()).into(), initiate_request.clone())?;
+
+        let app_id = MultiGomoku::<T>::get_app_id(initiate_request.nonce, initiate_request.players.clone());
+        let mut board_state = vec![0; 228];
+        board_state[0] = NONE;
+        board_state[1] = BLACK;
+        board_state[2] = BLACK_PLAYER_ID_1;
+        board_state[3] = WHITE;
+        board_state[4] = WHITE;
+        board_state[5] = BLACK;
+        board_state[6] = BLACK;
+        board_state[7] = WHITE;
+        board_state[8] = WHITE;
+        board_state[9] = BLACK;
+        let state_proof = get_state_proof::<T>(1, board_state, 2.into(), app_id);
     }: _(RawOrigin::Signed(players[0].clone()), state_proof)
 
     update_by_action {
@@ -145,19 +153,20 @@ benchmarks! {
         let initiate_request = AppInitiateRequest {
             nonce: i as u128,
             players: players.clone(),
+            player_num: 2,
             timeout: 2.into(),
             min_stone_offchain: 5,
             max_stone_onchain: 5
         };
-        SingleGomoku::<T>::app_initiate(RawOrigin::Signed(players[0].clone()).into(), initiate_request.clone())?;
-        let app_id = SingleGomoku::<T>::get_app_id(initiate_request.nonce, initiate_request.players.clone());
+        MultiGomoku::<T>::app_initiate(RawOrigin::Signed(players[0].clone()).into(), initiate_request.clone())?;
 
+        let app_id = MultiGomoku::<T>::get_app_id(initiate_request.nonce, initiate_request.players.clone());
         // place stone
-        place_stone::<T>(app_id, i as u128, players.clone());
+        place_stone::<T>(app_id, players.clone(), i as u128);
 
-        let settle_finalized_time = SingleGomoku::<T>::get_settle_finalized_time(app_id).unwrap();
+        let settle_finalized_time = MultiGomoku::<T>::get_settle_finalized_time(app_id).unwrap();
         System::<T>::set_block_number(settle_finalized_time + 1.into());
-    }: _(RawOrigin::Signed(players[1].clone()), app_id, vec![3, 12])
+    }: _(RawOrigin::Signed(players[0].clone()), app_id, vec![3, 12])
 
     finalize_on_action_timeout {
         let i in 0 .. 1000;
@@ -177,26 +186,34 @@ benchmarks! {
         let initiate_request = AppInitiateRequest {
             nonce: i as u128,
             players: players.clone(),
+            player_num: 2,
             timeout: 2.into(),
             min_stone_offchain: 5,
             max_stone_onchain: 5
         };
-        SingleGomoku::<T>::app_initiate(RawOrigin::Signed(players[0].clone()).into(), initiate_request.clone())?;
-        let app_id = SingleGomoku::<T>::get_app_id(initiate_request.nonce, initiate_request.players.clone());
+        MultiGomoku::<T>::app_initiate(RawOrigin::Signed(player1.clone()).into(), initiate_request.clone())?;
 
-        let mut board_state = vec![0; 227];
-        board_state[0] = 0; // winner
-        board_state[1] = 2; // turn
-        board_state[2] = 1; // (0, 0)
-        board_state[3] = 1; // (0, 1)
-        board_state[4] = 1; // (0, 2)
-        board_state[5] = 1; // (0, 3)
-        board_state[101] = 2;
-        board_state[102] = 2;
-        board_state[103] = 2;
-        let state_proof = get_state_proof::<T>(i as u128, 3, board_state, 0.into(), app_id);
-        SingleGomoku::<T>::update_by_state(RawOrigin::Signed(players[0].clone()).into(), state_proof)?;
-        let deadline = SingleGomoku::<T>::get_action_deadline(app_id).unwrap();
+        let app_id = MultiGomoku::<T>::get_app_id(initiate_request.nonce, initiate_request.players.clone());
+        let mut board_state = vec![0; 228];
+        board_state[0] = NONE;
+        board_state[1] = WHITE;
+        board_state[2] = BLACK_PLAYER_ID_2;
+        board_state[3] = BLACK;
+        board_state[4] = BLACK;
+        board_state[5] = BLACK;
+        board_state[6] = BLACK;
+        board_state[101] = WHITE;
+        board_state[102] = WHITE;
+        board_state[103] = WHITE;
+        let state_proof = get_state_proof::<T>(1, board_state, 2.into(), app_id);
+        MultiGomoku::<T>::update_by_state(RawOrigin::Signed(players[0].clone()).into(),  state_proof)?;
+        
+        let settle_finalized_time = MultiGomoku::<T>::get_settle_finalized_time(app_id).unwrap();
+        System::<T>::set_block_number(settle_finalized_time + 1.into());
+
+        MultiGomoku::<T>::update_by_action(RawOrigin::Signed(players[1].clone()).into(), app_id, vec![3, 12])?;
+
+        let deadline = MultiGomoku::<T>::get_action_deadline(app_id).unwrap();
         System::<T>::set_block_number(deadline + 1.into());
     }: _(RawOrigin::Signed(players[0].clone()), app_id)
 
@@ -218,17 +235,36 @@ benchmarks! {
         let initiate_request = AppInitiateRequest {
             nonce: i as u128,
             players: players.clone(),
+            player_num: 2,
             timeout: 2.into(),
             min_stone_offchain: 5,
             max_stone_onchain: 5
         };
-        SingleGomoku::<T>::app_initiate(RawOrigin::Signed(players[0].clone()).into(), initiate_request.clone())?;
-        let app_id = SingleGomoku::<T>::get_app_id(initiate_request.nonce, initiate_request.players.clone());
-        let mut board_state = vec![0; 227];
-        board_state[0] = 2; // winner
-        board_state[1] = 0; // turn
-        let state_proof = get_state_proof::<T>(i as u128, 1, board_state, 0.into(), app_id);
-        SingleGomoku::<T>::update_by_state(RawOrigin::Signed(players[0].clone()).into(), state_proof);
+        MultiGomoku::<T>::app_initiate(RawOrigin::Signed(players[0].clone()).into(), initiate_request.clone())?;
+
+        let app_id = MultiGomoku::<T>::get_app_id(initiate_request.nonce, initiate_request.players.clone());
+        let mut board_state = vec![0; 228];
+        board_state[0] = NONE;
+        board_state[1] = WHITE;
+        board_state[2] = BLACK_PLAYER_ID_2;
+        board_state[3] = BLACK;
+        board_state[4] = BLACK;
+        board_state[5] = BLACK;
+        board_state[6] = BLACK;
+        board_state[101] = WHITE;
+        board_state[102] = WHITE;
+        board_state[103] = WHITE;
+        let state_proof = get_state_proof::<T>(1, board_state, 2.into(), app_id);
+        MultiGomoku::<T>::update_by_state(RawOrigin::Signed(players[0].clone()).into(),  state_proof)?;
+        
+        let settle_finalized_time = MultiGomoku::<T>::get_settle_finalized_time(app_id).unwrap();
+        System::<T>::set_block_number(settle_finalized_time + 1.into());
+
+        MultiGomoku::<T>::update_by_action(RawOrigin::Signed(players[1].clone()).into(), app_id, vec![3, 12])?;
+
+        let deadline = MultiGomoku::<T>::get_action_deadline(app_id).unwrap();
+        System::<T>::set_block_number(deadline + 1.into());
+        MultiGomoku::<T>::finalize_on_action_timeout(RawOrigin::Signed(players[0].clone()).into(), app_id)?;
     }: _(RawOrigin::Signed(players[0].clone()), app_id)
 
     get_outcome {
@@ -249,17 +285,36 @@ benchmarks! {
         let initiate_request = AppInitiateRequest {
             nonce: i as u128,
             players: players.clone(),
+            player_num: 2,
             timeout: 2.into(),
             min_stone_offchain: 5,
             max_stone_onchain: 5
         };
-        SingleGomoku::<T>::app_initiate(RawOrigin::Signed(players[0].clone()).into(), initiate_request.clone())?;
-        let app_id = SingleGomoku::<T>::get_app_id(initiate_request.nonce, initiate_request.players.clone());
-        let mut board_state = vec![0; 227];
-        board_state[0] = 2; // winner
-        board_state[1] = 0; // turn
-        let state_proof = get_state_proof::<T>(i as u128, 1, board_state, 0.into(), app_id);
-        SingleGomoku::<T>::update_by_state(RawOrigin::Signed(players[0].clone()).into(), state_proof);
+        MultiGomoku::<T>::app_initiate(RawOrigin::Signed(players[0].clone()).into(), initiate_request.clone())?;
+
+        let app_id = MultiGomoku::<T>::get_app_id(initiate_request.nonce, initiate_request.players.clone());
+        let mut board_state = vec![0; 228];
+        board_state[0] = NONE;
+        board_state[1] = WHITE;
+        board_state[2] = BLACK_PLAYER_ID_2;
+        board_state[3] = BLACK;
+        board_state[4] = BLACK;
+        board_state[5] = BLACK;
+        board_state[6] = BLACK;
+        board_state[101] = WHITE;
+        board_state[102] = WHITE;
+        board_state[103] = WHITE;
+        let state_proof = get_state_proof::<T>(1, board_state, 2.into(), app_id);
+        MultiGomoku::<T>::update_by_state(RawOrigin::Signed(players[0].clone()).into(),  state_proof)?;
+        
+        let settle_finalized_time = MultiGomoku::<T>::get_settle_finalized_time(app_id).unwrap();
+        System::<T>::set_block_number(settle_finalized_time + 1.into());
+
+        MultiGomoku::<T>::update_by_action(RawOrigin::Signed(players[1].clone()).into(), app_id, vec![3, 12])?;
+
+        let deadline = MultiGomoku::<T>::get_action_deadline(app_id).unwrap();
+        System::<T>::set_block_number(deadline + 1.into());
+        MultiGomoku::<T>::finalize_on_action_timeout(RawOrigin::Signed(players[0].clone()).into(), app_id)?;
     }: _(RawOrigin::Signed(players[0].clone()), app_id, 2)
 }
 
@@ -280,34 +335,34 @@ mod tests {
     fn update_by_state() {
         ExtBuilder::build().execute_with(|| {
             assert_ok!(test_benchmark_update_by_state::<TestRuntime>());
-        });
+        })
     }
 
     #[test]
     fn update_by_action() {
         ExtBuilder::build().execute_with(|| {
             assert_ok!(test_benchmark_update_by_action::<TestRuntime>());
-        });
+        })
     }
 
     #[test]
     fn finalize_on_action_timeout() {
         ExtBuilder::build().execute_with(|| {
             assert_ok!(test_benchmark_finalize_on_action_timeout::<TestRuntime>());
-        });
+        })
     }
 
     #[test]
     fn is_finalized() {
         ExtBuilder::build().execute_with(|| {
             assert_ok!(test_benchmark_is_finalized::<TestRuntime>());
-        });
+        })
     }
 
     #[test]
     fn get_outcome() {
         ExtBuilder::build().execute_with(|| {
             assert_ok!(test_benchmark_get_outcome::<TestRuntime>());
-        });
+        })
     }
 }

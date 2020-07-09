@@ -31,19 +31,19 @@ fn get_state_proof<T: Trait>(
 benchmarks! {
     _{ }
 
-    app_initiate {
+    session_initiate {
         let i in 0 .. 1000;
         let mut player1 = T::AccountId::default();
         let mut player2 = T::AccountId::default();
         player1 = account("player1", i, SEED);
         player2 = account("player2", i, SEED);
-        let mut player = vec![];
+        let mut players = vec![];
         if player1 < player2 {
-            player.push(player1.clone());
-            player.push(player2.clone());
+            players.push(player1.clone());
+            players.push(player2.clone());
         } else {
-            player.push(player2.clone());
-            player.push(player1.clone());
+            players.push(player2.clone());
+            players.push(player1.clone());
         }
 
         let initiate_request = SessionInitiateRequest {
@@ -60,13 +60,13 @@ benchmarks! {
         let mut player2 = T::AccountId::default();
         player1 = account("player1", i, SEED);
         player2 = account("player2", i, SEED);
-        let mut player = vec![];
+        let mut players = vec![];
         if player1 < player2 {
-            player.push(player1.clone());
-            player.push(player2.clone());
+            players.push(player1.clone());
+            players.push(player2.clone());
         } else {
-            player.push(player2.clone());
-            player.push(player1.clone());
+            players.push(player2.clone());
+            players.push(player1.clone());
         }
 
         let initiate_request = SessionInitiateRequest {
@@ -75,11 +75,11 @@ benchmarks! {
             players: players.clone(),
             timeout: 2.into()
         };
-        MultiApp::<T>::app_initiate(RawOrigin::Signed(player1.clone()).into(), initiate_request.clone())?;
-        let session_id = MultiApp::<T>::get_app_id(initiate_request.nonce, initiate_request.players.clone());
+        MultiApp::<T>::session_initiate(RawOrigin::Signed(players[0].clone()).into(), initiate_request.clone())?;
+        let session_id = MultiApp::<T>::get_session_id(initiate_request.nonce, initiate_request.players.clone());
 
-        let state_proof = get_state_proof::<T>(i as u128, 5, 2.into(), session_id);
-    }: _(RawOrigin::Signed(player1.clone()), state_proof)
+        let state_proof = get_state_proof::<T>(1, 5, 2.into(), session_id);
+    }: _(RawOrigin::Signed(players[0].clone()), state_proof)
 
     update_by_action {
         let i in 0 .. 1000;
@@ -87,13 +87,13 @@ benchmarks! {
         let mut player2 = T::AccountId::default();
         player1 = account("player1", i, SEED);
         player2 = account("player2", i, SEED);
-        let mut player = vec![];
+        let mut players = vec![];
         if player1 < player2 {
-            player.push(player1.clone());
-            player.push(player2.clone());
+            players.push(player1.clone());
+            players.push(player2.clone());
         } else {
-            player.push(player2.clone());
-            player.push(player1.clone());
+            players.push(player2.clone());
+            players.push(player1.clone());
         }
 
         let initiate_request = SessionInitiateRequest {
@@ -102,13 +102,13 @@ benchmarks! {
             players: players.clone(),
             timeout: 2.into()
         };
-        MultiApp::<T>::app_initiate(RawOrigin::Signed(player1.clone()), initiate_request.clone())?;
-        let session_id = MultiApp::<T>::get_app_id(initiate_request.nonce, initiate_request.players.clone());
-        let state_proof = get_state_proof::<T>(i as u128, 3, 2.into(), session_id);
-        MultiApp::<T>::update_by_state(RawOrigin::Signed(player1.clone()).into(), state_proof)?;
+        MultiApp::<T>::session_initiate(RawOrigin::Signed(players[0].clone()).into(), initiate_request.clone())?;
+        let session_id = MultiApp::<T>::get_session_id(initiate_request.nonce, initiate_request.players.clone());
+        let state_proof = get_state_proof::<T>(1, 3, 2.into(), session_id);
+        MultiApp::<T>::update_by_state(RawOrigin::Signed(players[0].clone()).into(), state_proof)?;
         let settle_finalized_time = MultiApp::<T>::get_settle_finalized_time(session_id).unwrap();
         System::<T>::set_block_number(settle_finalized_time + 1.into());
-    }: _(RawOrigin::Signed(player1.clone()), session_id, 3)
+    }: _(RawOrigin::Signed(players[0].clone()), session_id, 3)
 
     finalize_on_action_timeout {
         let i in 0 .. 1000;
@@ -116,13 +116,13 @@ benchmarks! {
         let mut player2 = T::AccountId::default();
         player1 = account("player1", i, SEED);
         player2 = account("player2", i, SEED);
-        let mut player = vec![];
+        let mut players = vec![];
         if player1 < player2 {
-            player.push(player1.clone());
-            player.push(player2.clone());
+            players.push(player1.clone());
+            players.push(player2.clone());
         } else {
-            player.push(player2.clone());
-            player.push(player1.clone());
+            players.push(player2.clone());
+            players.push(player1.clone());
         }
 
         let initiate_request = SessionInitiateRequest {
@@ -131,14 +131,14 @@ benchmarks! {
             players: players.clone(),
             timeout: 2.into()
         };
-        MultiApp::<T>::app_initiate(RawOrigin::Signed(player1.clone()), initiate_request.clone())?;
-        let session_id = MultiApp::<T>::get_app_id(initiate_request.nonce, initiate_request.players.clone());
-        let state_proof = get_state_proof::<T>(i as u128, 2, 2.into(), session_id);
+        MultiApp::<T>::session_initiate(RawOrigin::Signed(players[0].clone()).into(), initiate_request.clone())?;
+        let session_id = MultiApp::<T>::get_session_id(initiate_request.nonce, initiate_request.players.clone());
+        let state_proof = get_state_proof::<T>(1, 2, 2.into(), session_id);
         MultiApp::<T>::update_by_state(RawOrigin::Signed(player1.clone()).into(), state_proof)?;
 
         // advance block number after action timeout
         System::<T>::set_block_number(5.into());
-    }: _(RawOrigin::Signed(player1.clone()), session_id)
+    }: _(RawOrigin::Signed(players[0].clone()), session_id)
 
     is_finalized {
         let i in 0 .. 1000;
@@ -146,13 +146,13 @@ benchmarks! {
         let mut player2 = T::AccountId::default();
         player1 = account("player1", i, SEED);
         player2 = account("player2", i, SEED);
-        let mut player = vec![];
+        let mut players = vec![];
         if player1 < player2 {
-            player.push(player1.clone());
-            player.push(player2.clone());
+            players.push(player1.clone());
+            players.push(player2.clone());
         } else {
-            player.push(player2.clone());
-            player.push(player1.clone());
+            players.push(player2.clone());
+            players.push(player1.clone());
         }
 
         let initiate_request = SessionInitiateRequest {
@@ -161,11 +161,11 @@ benchmarks! {
             players: players.clone(),
             timeout: 2.into()
         };
-        MultiApp::<T>::app_initiate(RawOrigin::Signed(player1.clone()), initiate_request.clone())?;
-        let session_id = MultiApp::<T>::get_app_id(initiate_request.nonce, initiate_request.players.clone());
-        let state_proof = get_state_proof::<T>(i as u128, 2, 2.into(), session_id);
-        MultiApp::<T>::update_by_state(RawOrigin::Signed(player1.clone()).into(), state_proof)?;
-    }: _(RawOrigin::Signed(player1.clone()), session_id)
+        MultiApp::<T>::session_initiate(RawOrigin::Signed(players[0].clone()).into(), initiate_request.clone())?;
+        let session_id = MultiApp::<T>::get_session_id(initiate_request.nonce, initiate_request.players.clone());
+        let state_proof = get_state_proof::<T>(1, 2, 2.into(), session_id);
+        MultiApp::<T>::update_by_state(RawOrigin::Signed(players[0].clone()).into(), state_proof)?;
+    }: _(RawOrigin::Signed(players[0].clone()), session_id)
 
     get_outcome {
         let i in 0 .. 1000;
@@ -173,13 +173,13 @@ benchmarks! {
         let mut player2 = T::AccountId::default();
         player1 = account("player1", i, SEED);
         player2 = account("player2", i, SEED);
-        let mut player = vec![];
+        let mut players = vec![];
         if player1 < player2 {
-            player.push(player1.clone());
-            player.push(player2.clone());
+            players.push(player1.clone());
+            players.push(player2.clone());
         } else {
-            player.push(player2.clone());
-            player.push(player1.clone());
+            players.push(player2.clone());
+            players.push(player1.clone());
         }
 
         let initiate_request = SessionInitiateRequest {
@@ -188,11 +188,11 @@ benchmarks! {
             players: players.clone(),
             timeout: 2.into()
         };
-        MultiApp::<T>::app_initiate(RawOrigin::Signed(player1.clone()), initiate_request.clone())?;
-        let session_id = MultiApp::<T>::get_app_id(initiate_request.nonce, initiate_request.players.clone());
-        let state_proof = get_state_proof::<T>(i as u128, 2, 2.into(), session_id);
-        MultiApp::<T>::update_by_state(RawOrigin::Signed(player1.clone()).into(), state_proof)?;
-    }: _(RawOrigin::Signed(player1.clone()), session_id, 2)
+        MultiApp::<T>::session_initiate(RawOrigin::Signed(players[0].clone()).into(), initiate_request.clone())?;
+        let session_id = MultiApp::<T>::get_session_id(initiate_request.nonce, initiate_request.players.clone());
+        let state_proof = get_state_proof::<T>(1, 2, 2.into(), session_id);
+        MultiApp::<T>::update_by_state(RawOrigin::Signed(players[0].clone()).into(), state_proof)?;
+    }: _(RawOrigin::Signed(players[0].clone()), session_id, 2)
 }
 
 #[cfg(test)]
